@@ -144,7 +144,7 @@ Boolean: True if parsing the Options section is successful. False if it is not.
 *)
 var
   res: Boolean;
-  Manifest TStringList;
+  Manifest: TStringList;
   i: Integer;
   key: String;
   value: String;
@@ -169,10 +169,10 @@ Boolean: True if parsing the Locations sections is successful. False if it is
 *)
 var
   res: Boolean;
-  Manifest TStringList;
+  Manifest: TStringList;
   i: Integer;
   key: String;
-  value: String:
+  value: String;
 begin
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ExpandConstant('{tmp}\krcimanifest.ini'));
@@ -194,6 +194,7 @@ Boolean: True if parsing of the entire manifest is successful. False if it is
 *)
 var
   res: Boolean;
+  i: Integer;
 begin
   res := True;
   
@@ -206,13 +207,14 @@ begin
   end;
 
   (* TODO: Take this proof-of-concept code and split it out into handling the
-  the Options section and individual Locations sections separately *)
+  the Options section and individual Locations sections separately
   for i := 1 to 4 do begin
     SplitManifestKeyValuePair(Manifest[i], key, value);
     MsgBox(Manifest[i], mbInformation, MB_OK);
     MsgBox(key, mbInformation, MB_OK);
     MsgBox(value, mbInformation, MB_OK);
   end;
+  *)
 end;
 
 function InitializeSetup(): Boolean;

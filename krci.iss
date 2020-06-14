@@ -13,7 +13,9 @@
 #define TheAppURL "http://kujatareborn.com/wordpress/"
 #define TheAppSupportURL "https://discord.com/invite/uBWtbz"
 #define TheAppUpdateURL "http://kujatareborn.com/wordpress/"
+
 #define ManifestURL "https://drive.google.com/uc?export=download&id=1emgTwMWvGLPLBsT2o9t9yd7p0E7glW48"
+#define ManifestLocalFilename "{tmp}\krcimanifest.ini"
 #define ManifestKeyValueSeparator "="
 
 [Setup]
@@ -84,7 +86,7 @@ var
   res: Boolean;
 begin
   (* TODO: Check for local manifest first *)
-  res := idpDownloadFile('{#ManifestURL}', ExpandConstant('{tmp}\krcimanifest.ini'));
+  res := idpDownloadFile('{#ManifestURL}', ExpandConstant('{#ManifestLocalFilename}'));
 
   if not res then begin
     MsgBox('Failed to download the manifest file.', mbError, MB_OK);
@@ -150,7 +152,7 @@ var
   value: String;
 begin
   Manifest := TStringList.Create;
-  Manifest.LoadFromFile(ExpandConstant('{tmp}\krcimanifest.ini'));
+  Manifest.LoadFromFile(ExpandConstant('{#ManifestLocalFilename}'));
   (* TODO: Take proof-of-concept parsing currently in  ParseManifest and make
   it specific to parsing the Options section. *)
 end;
@@ -175,7 +177,7 @@ var
   value: String;
 begin
   Manifest := TStringList.Create;
-  Manifest.LoadFromFile(ExpandConstant('{tmp}\krcimanifest.ini'));
+  Manifest.LoadFromFile(ExpandConstant('{#ManifestLocalFilename}'));
   (* TODO: Take proof-of-concept parsing currently in ParseManifest and make
   it specific to parsing the Locations sections. *)
 end;

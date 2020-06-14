@@ -51,6 +51,7 @@ Source: "Readme.txt"; DestDir: "{app}"; Flags: isreadme
 Name: "{group}\My Program"; Filename: "{app}\MyProg.exe"
 
 [Code]
+(* Type declarations *)
 type
   MItem = record
     (* The MItem type holds a key-value pair found in the installer manifest
@@ -65,11 +66,14 @@ type
   end;
 
 
+(* Global variables *)
 var
   MVerControl: MItem;         (* The version control data from the manifest *)
   MOptions: array of MItem;   (* The data from the manifest's Option section *)
   MLocations: array of MItem; (* Locations of the various downloadable data *)
 
+
+(* Functions and Procedures *)
 function RetrieveManifest(): Boolean;
 (* Locates the manifest file. Usually it is downloaded from a well-known URL.
 This behavior can be overridden by providing a manifest file in the same
@@ -182,7 +186,6 @@ begin
   it specific to parsing the Locations sections. *)
 end;
 
-(* TODO: Awesome function documentation *)
 function ParseManifest(): Boolean;
 (* Parent function for parsing the entire manifest. Delegates most of the
 actual work to ParseManifestOptions() and ParseManifestLocations().

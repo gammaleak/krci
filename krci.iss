@@ -17,7 +17,10 @@
 #define ManifestURL "https://drive.google.com/uc?export=download&id=1emgTwMWvGLPLBsT2o9t9yd7p0E7glW48"
 #define ManifestLocalFilename "{src}\krcimanifest.ini"
 #define ManifestTempFilename "{tmp}\krcimanifest.ini"
+#define ManifestOptionsHeader "[Options]"
 #define ManifestKeyValueSeparator "="
+
+#define DefaultArrayLength 12
 
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
@@ -65,7 +68,7 @@ type
     *)
     
     Key: String;
-    Value: array of String;
+    Value: String;
   end;
 
 
@@ -167,7 +170,7 @@ begin
     Value := Trim(Value);
   end;
 
-  Log('SplitManifestKeyValuePair(): Exiting function. Reults == ' + BoolToStr(res) + '.');
+  Log('SplitManifestKeyValuePair(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
@@ -187,13 +190,37 @@ var
   i: Integer;
   key: String;
   value: String;
+  count: Integer;
+  done: Boolean;
 begin
   Log('ParseManifestOptions(): Beginning function.');
   res := True;
+  done := False;
+  count := 0;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ManifestLocation);
   (* TODO: Take proof-of-concept parsing currently in  ParseManifest and make
   it specific to parsing the Options section. *)
+  res := Manifest.Find('{#ManifestOptionsHeader}', i);
+
+  if res then begin
+    Log('ParseManifestOptions(): [Options] header found.');
+    
+    SetArrayLength(MOptions, {#DefaultArrayLength});
+    
+    while not done do begin
+      i := i + 1;
+      count := count + 1;
+      if not SplitManifestKeyValuePair(Manifest[i], key, value) then begin
+          done := True;
+      end else begin
+        MOptions[count].Key := key;
+        MOptions[count].Value := value;
+        Log('ParseManifestOptions(): Storing option ' + MOptions[count].Key + ' with value ' + MOptions[count].Value + '.');
+      end;
+    end;
+  end;  
+
   Log('ParseManifestOptions(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;

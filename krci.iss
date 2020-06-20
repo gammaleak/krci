@@ -15,7 +15,8 @@
 #define TheAppUpdateURL "http://kujatareborn.com/wordpress/"
 
 #define ManifestURL "https://drive.google.com/uc?export=download&id=1emgTwMWvGLPLBsT2o9t9yd7p0E7glW48"
-#define ManifestLocalFilename "{tmp}\krcimanifest.ini"
+#define ManifestLocalFilename "{src}\krcimanifest.ini"
+#define ManifestTempFilename "{tmp}\krcimanifest.ini"
 #define ManifestKeyValueSeparator "="
 
 [Setup]
@@ -70,12 +71,21 @@ type
 
 (* Global variables *)
 var
+  ManifestLocation: String;   (* Location of manifest file used for setup *)
   MVerControl: MItem;         (* The version control data from the manifest *)
   MOptions: array of MItem;   (* The data from the manifest's Option section *)
   MLocations: array of MItem; (* Locations of the various downloadable data *)
 
 
 (* Functions and Procedures *)
+function BoolToStr(const bool: Boolean): String;
+begin
+  if bool then begin
+    Result := 'True';
+  end else
+    Result := 'False';
+end;
+
 function RetrieveManifest(): Boolean;
 (* Locates the manifest file. Usually it is downloaded from a well-known URL.
 This behavior can be overridden by providing a manifest file in the same
@@ -90,19 +100,31 @@ Boolean: True if successful acquiring the manivest, False if unsuccessful.
 *)
 var
   res: Boolean;
+  local: Boolean;
 begin
   Log('RetrieveManifest(): Beginning function.');
   res := True;
-  (* TODO: Check for local manifest first *)
+  local := False;
+  
+  if FileExists(ExpandConstant('{#ManifestLocalFilename}')) then begin
+    Log('RetrieveManifest(): Local manifest found.');
+    local := True;
+    ManifestLocation := ExpandConstant('{#ManifestLocalFilename}');
+  end else
+    Log('RetrieveManifest(): No local manifest found.');
 
-  Log('RetrieveManifest(): Attempting to download remote manifest file.');
-  res := idpDownloadFile('{#ManifestURL}', ExpandConstant('{#ManifestLocalFilename}'));
-
-  if not res then begin
-    Log('RetrieveManifest(): Failed to download the manifest file.');
+  if not local then begin
+    Log('RetrieveManifest(): Attempting to download remote manifest file.');
+    res := idpDownloadFile('{#ManifestURL}', ExpandConstant('{#ManifestTempFilename}'));
+        
+    if res then begin
+      Log('RetrieveManifest(): Remote manifest downloaded successfully.');
+      ManifestLocation := ExpandConstant('{#ManifestTempFilename}');
+    end else
+      Log('RetrieveManifest(): Failed to download the manifest file.');
   end;
 
-  Log('RetrieveManifest(): Exiting function. Result == ' + res + '.');
+  Log('RetrieveManifest(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res 
 end;
 
@@ -145,7 +167,7 @@ begin
     Value := Trim(Value);
   end;
 
-  Log('SplitManifestKeyValuePair(): Exiting function. Reults == ' + res + '.');
+  Log('SplitManifestKeyValuePair(): Exiting function. Reults == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
@@ -169,10 +191,10 @@ begin
   Log('ParseManifestOptions(): Beginning function.');
   res := True;
   Manifest := TStringList.Create;
-  Manifest.LoadFromFile(ExpandConstant('{#ManifestLocalFilename}'));
+  Manifest.LoadFromFile(ManifestLocation);
   (* TODO: Take proof-of-concept parsing currently in  ParseManifest and make
   it specific to parsing the Options section. *)
-  Log('ParseManifestOptions(): Exiting function. Result == ' + res + '.');
+  Log('ParseManifestOptions(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
@@ -198,10 +220,10 @@ begin
   Log('ParseManifestLocations(): Beginning function.');
   res := True;
   Manifest := TStringList.Create;
-  Manifest.LoadFromFile(ExpandConstant('{#ManifestLocalFilename}'));
+  Manifest.LoadFromFile(ManifestLocation);
   (* TODO: Take proof-of-concept parsing currently in ParseManifest and make
   it specific to parsing the Locations sections. *)
-  Log('ParseManifestLocations(): Exiting function Result == ' + res + '.');
+  Log('ParseManifestLocations(): Exiting function Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
@@ -240,7 +262,7 @@ begin
     MsgBox(value, mbInformation, MB_OK);
   end;
   *)
-  Log('ParseManifest(): Exiting function. Result == ' + res + '.');
+  Log('ParseManifest(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
@@ -270,9 +292,9 @@ begin
   end;
 
   if not res then begin
-    Log('InitializeSetup(): res == FALSE, setup will not continue.', mbError, MB_OK);
+    Log('InitializeSetup(): res == FALSE, setup will not continue.');
   end;
 
-  Log('InitializeSetup(): Exiting function. Result == ' + res + '.');
+  Log('InitializeSetup(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;

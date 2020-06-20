@@ -38,6 +38,8 @@ OutputDir=userdocs:Inno Setup Examples Output
 AllowNetworkDrive=no
 AllowUNCPath=no
 
+SetupLogging=yes
+
 
 [Files]
 ; Including some files for now that will go away eventually. This is just a
@@ -89,13 +91,18 @@ Boolean: True if successful acquiring the manivest, False if unsuccessful.
 var
   res: Boolean;
 begin
+  Log('RetrieveManifest(): Beginning function.');
+  res := True;
   (* TODO: Check for local manifest first *)
+
+  Log('RetrieveManifest(): Attempting to download remote manifest file.');
   res := idpDownloadFile('{#ManifestURL}', ExpandConstant('{#ManifestLocalFilename}'));
 
   if not res then begin
-    MsgBox('Failed to download the manifest file.', mbError, MB_OK);
+    Log('RetrieveManifest(): Failed to download the manifest file.');
   end;
 
+  Log('RetrieveManifest(): Exiting function. Result == ' + res + '.');
   Result := res 
 end;
 
@@ -117,15 +124,18 @@ var
   res: Boolean;
   p: Integer;
 begin
-  res := True
+  Log('SplitManifestKeyValuePair(): Beginning function.');
+  res := True;
 
+  Log('SplitManifestKeyValuePair(): Locating the manifest key-value separator: {#ManifestKeyValueSeparator}.');
   p := Pos('{#ManifestKeyValueSeparator}', Line);
   if p <= 0 then begin
+    Log('SplitManifestKeyValuePair(): Could not locate the manifest key-value separator: {#ManifestKeyValueSeparator}.');
     res := False;
   end;
 
   if res then begin
-    MsgBox('Line == ' + Line, mbInformation, MB_OK);
+    Log('SplitManifestKeyValuePair(): Splitting key-value pair of line: ' + Line);
     Key := Line;
     Delete(Key, p, Length(Key)-(p-1));
     Key := Trim(Key);
@@ -135,6 +145,7 @@ begin
     Value := Trim(Value);
   end;
 
+  Log('SplitManifestKeyValuePair(): Exiting function. Reults == ' + res + '.');
   Result := res;
 end;
 
@@ -155,10 +166,14 @@ var
   key: String;
   value: String;
 begin
+  Log('ParseManifestOptions(): Beginning function.');
+  res := True;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ExpandConstant('{#ManifestLocalFilename}'));
   (* TODO: Take proof-of-concept parsing currently in  ParseManifest and make
   it specific to parsing the Options section. *)
+  Log('ParseManifestOptions(): Exiting function. Result == ' + res + '.');
+  Result := res;
 end;
 
 function ParseManifestLocations(): Boolean;
@@ -180,10 +195,14 @@ var
   key: String;
   value: String;
 begin
+  Log('ParseManifestLocations(): Beginning function.');
+  res := True;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ExpandConstant('{#ManifestLocalFilename}'));
   (* TODO: Take proof-of-concept parsing currently in ParseManifest and make
   it specific to parsing the Locations sections. *)
+  Log('ParseManifestLocations(): Exiting function Result == ' + res + '.');
+  Result := res;
 end;
 
 function ParseManifest(): Boolean;
@@ -201,6 +220,7 @@ var
   res: Boolean;
   i: Integer;
 begin
+  Log('ParseManifest(): Beginning function.');
   res := True;
   
   if res then begin
@@ -220,6 +240,8 @@ begin
     MsgBox(value, mbInformation, MB_OK);
   end;
   *)
+  Log('ParseManifest(): Exiting function. Result == ' + res + '.');
+  Result := res;
 end;
 
 function InitializeSetup(): Boolean;
@@ -239,7 +261,7 @@ var
   Manifest: TStringList;
   i: Integer;
 begin
-  MsgBox('About to download manifest', mbInformation, MB_OK);
+  Log('InitializeSetup(): Beginning function.');
 
   res := RetrieveManifest();
 
@@ -248,7 +270,9 @@ begin
   end;
 
   if not res then begin
-    MsgBox('The installer could not initialize', mbError, MB_OK);
+    Log('InitializeSetup(): res == FALSE, setup will not continue.', mbError, MB_OK);
   end;
+
+  Log('InitializeSetup(): Exiting function. Result == ' + res + '.');
   Result := res;
 end;

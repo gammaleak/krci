@@ -210,7 +210,6 @@ begin
     
     while not done do begin
       i := i + 1;
-      count := count + 1;
       
       if count >= {#DefaultArrayLength} then begin
         (* Grow the array size by #DefaultArrayLength *)
@@ -224,10 +223,13 @@ begin
       end else begin
         MOptions[count].Key := key;
         MOptions[count].Value := value;
-        Log('ParseManifestOptions(): Storing option ' + MOptions[count].Key + ' with value ' + MOptions[count].Value + '.');
+        Log('ParseManifestOptions(): Storing option ' + MOptions[count].Key + ' with value ' + MOptions[count].Value + ' in MOptions[' + IntToStr(count) + '].');
+        count := count + 1;
       end;
     end;
-  end;  
+  end;
+  
+  SetArrayLength(MOptions, count);
 
   Log('ParseManifestOptions(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;

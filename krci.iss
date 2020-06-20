@@ -211,8 +211,16 @@ begin
     while not done do begin
       i := i + 1;
       count := count + 1;
+      
+      if count >= {#DefaultArrayLength} then begin
+        (* Grow the array size by #DefaultArrayLength *)
+        (* We assume that SetArrayLength doesn't destroy any data, but this may
+        need to be verified through testing *)
+        SetArrayLength(MOptions, count + {#DefaultArrayLength});
+      end;
+        
       if not SplitManifestKeyValuePair(Manifest[i], key, value) then begin
-          done := True;
+        done := True;
       end else begin
         MOptions[count].Key := key;
         MOptions[count].Value := value;

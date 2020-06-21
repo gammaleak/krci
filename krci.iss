@@ -18,9 +18,8 @@
 #define ManifestLocalFilename "{src}\krcimanifest.ini"
 #define ManifestTempFilename "{tmp}\krcimanifest.ini"
 #define ManifestOptionsHeader "[Options]"
+#define ManifestVerControlOption = "MinVer"
 #define ManifestKeyValueSeparator "="
-
-#define DefaultArrayLength 12
 
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
@@ -71,13 +70,24 @@ type
     Value: String;
   end;
 
+type
+  MOption = record
+    (* The MLocation type associates a given manifest option with one or more
+    download locations for that option
+
+    Option: The option for finding installation data at one or more locations
+    Locations: The locations where installation data are found
+    *) 
+
+    Option: MItem;
+    Locations: array of MItem;
+  end;
 
 (* Global variables *)
 var
-  ManifestLocation: String;   (* Location of manifest file used for setup *)
-  MVerControl: MItem;         (* The version control data from the manifest *)
-  MOptions: array of MItem;   (* The data from the manifest's Option section *)
-  MLocations: array of MItem; (* Locations of the various downloadable data *)
+  ManifestLocation: String;   (* Manifest file actually used for setup *)
+  ManVerControl: MItem;       (* Version control data from the manifest *)
+  Options: array of MOption; (* Parsed data from the manifest *)
 
 
 (* Functions and Procedures *)
@@ -175,8 +185,7 @@ begin
 end;
 
 function ParseManifestOptions(): Boolean;
-(* Parses through the Options section of the manifest file and stores the data
-in the MVerControl and MOptions global variables.
+(* Parses through the Options section of the manifest file and stores the data.
 
 Parameters:
 (none)
@@ -206,30 +215,27 @@ begin
   if res then begin
     Log('ParseManifestOptions(): [Options] header found.');
     
-    SetArrayLength(MOptions, {#DefaultArrayLength});
+    SetArrayLength(Options, Manifest.Count);
     
     while not done do begin
       i := i + 1;
-      
-      if count >= {#DefaultArrayLength} then begin
-        (* Grow the array size by #DefaultArrayLength *)
-        (* We assume that SetArrayLength doesn't destroy any data, but this may
-        need to be verified through testing *)
-        SetArrayLength(MOptions, count + {#DefaultArrayLength});
-      end;
-        
       if not SplitManifestKeyValuePair(Manifest[i], key, value) then begin
         done := True;
       end else begin
-        MOptions[count].Key := key;
-        MOptions[count].Value := value;
-        Log('ParseManifestOptions(): Storing option ' + MOptions[count].Key + ' with value ' + MOptions[count].Value + ' in MOptions[' + IntToStr(count) + '].');
-        count := count + 1;
+        if key = '{#ManifestVerControlOption}' then begin
+          ManVerControl.Key := key;
+          ManVerControl.Value := value;
+        end else begin
+          Options[count].Option.Key := key;
+          Options[count].Option.Value := value;
+          Log('ParseManifestOptions(): Storing option ' + Options[count].Option.Key + ' with value ' + Options[count].Option.Value + ' in Options[' + IntToStr(count) + '].Option');
+          count := count + 1;
+         end;
       end;
     end;
   end;
   
-  SetArrayLength(MOptions, count);
+  SetArrayLength(Options, count);
 
   Log('ParseManifestOptions(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
@@ -249,17 +255,68 @@ Boolean: True if parsing the Locations sections is successful. False if it is
 *)
 var
   res: Boolean;
+  done: Boolean;
   Manifest: TStringList;
-  i: Integer;
+  locSectionLine: Integer;
   key: String;
   value: String;
+  count: Integer;
+  i: Integer;
+  j: Integer;
+  k: Integer;
+  header: String;
+  foundHeader: Boolean;
 begin
   Log('ParseManifestLocations(): Beginning function.');
   res := True;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ManifestLocation);
-  (* TODO: Take proof-of-concept parsing currently in ParseManifest and make
-  it specific to parsing the Locations sections. *)
+
+  for i := 0 to Manifest.Count - 1 do
+    Log('ParseManifestLocations(): Manifest line ' + IntToStr(i) + ' is ' + Manifest[i]);
+
+  for i := 0 to GetArrayLength(Options) - 1 do begin
+    header := '[' + Options[i].Option.Key + ']';
+    Log('ParseManifestLocations(): Trying to find ' + header + ' in the manifest file.');
+
+    (* The whole next block of code is absolutely stupid. In
+    ParseManifestOptions() above I use TStringList.Find() and it works just
+    fine. For some reason, it won't work when trying to search for the 'header'
+    variable assigned above. Makes zero sense. So, I brute force it below
+    instead. Totally lame, but whatcha gonna do? *)
+    foundHeader := False;
+    k := 0;
+    while (not foundHeader) and (k < Manifest.Count) do begin
+      Log('ParseManifestLocations(): Checking Manifest line ' + IntToStr(k) + ', ' + Manifest[k] + ' against ' + header + '.');
+      if Manifest[k] = header then begin
+        locSectionLine := k;
+        foundHeader := True
+      end;
+      k := k + 1;
+    end;
+
+    if foundHeader then begin
+      Log('ParseManifestLocations(): Found ' + header + ' in the manifest file.');
+      done := False;
+      j := locSectionLine;
+      count := 0;
+      SetArrayLength(Options[i].Locations, Manifest.Count);
+      while not (done) and (j < Manifest.Count - 1) do begin
+        j := j + 1;
+        if not SplitManifestKeyValuePair(Manifest[j], key, value) then begin
+          done := True;
+          SetArrayLength(Options[i].Locations, count);
+        end else begin
+          Options[i].Locations[count].Key := key;
+          Options[i].Locations[count].Value := value;
+          Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Value = ' + value + '.');
+          count := count + 1;
+        end;
+      end;
+    end else
+      Log('ParseManifestLocations(): Did not find ' + header + ' in the manifest file.');
+  end;
+
   Log('ParseManifestLocations(): Exiting function Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
@@ -277,7 +334,6 @@ Boolean: True if parsing of the entire manifest is successful. False if it is
 *)
 var
   res: Boolean;
-  i: Integer;
 begin
   Log('ParseManifest(): Beginning function.');
   res := True;
@@ -317,8 +373,6 @@ Boolean: True if initialization was succesful. False if not. If False is
 *)
 var
   res: Boolean;
-  Manifest: TStringList;
-  i: Integer;
 begin
   Log('InitializeSetup(): Beginning function.');
 

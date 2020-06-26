@@ -104,6 +104,38 @@ begin
     Result := 'False';
 end;
 
+function FindInTStringList(const tstrl: TStringList; const str: String; var line: Integer): Boolean;
+(* Finds a string within a TStringList. The string must be an exact match. The
+TStringList.Find function is supposed to do this, but fails for inexplicable
+reasons and can't be depended on. Therefore, this is my own brute-force
+version of the same.
+
+Parameters:
+tstrl: The TStringList to scan
+str: The string to scan for
+line: Returns the line number if the string is found.
+
+Returns
+Boolean: True if successful finding the string, False if unsuccessful.
+*)
+var
+  foundStr: Boolean;
+  k: Integer;
+begin
+  foundStr := False;
+  k := 0;
+  while (not foundStr) and (k < tstrl.Count) do begin
+    Log('FindInTStringList(): Checking TStringList line ' + IntToStr(k) + ', ' + tstrl[k] + ' against ' + str + '.');
+    if tstrl[k] = str then begin
+      line := k;
+      foundStr := True
+    end;
+    k := k + 1;
+  end;
+  
+  Result := foundStr;  
+end;
+
 function RetrieveManifest(): Boolean;
 (* Locates the manifest file. Usually it is downloaded from a well-known URL.
 This behavior can be overridden by providing a manifest file in the same
@@ -214,7 +246,8 @@ begin
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ManifestLocation);
 
-  res := Manifest.Find('{#ManifestOptionsHeader}', i);
+  (* res := Manifest.Find('{#ManifestOptionsHeader}', i); *)
+  res := FindInTStringList(Manifest, '{#ManifestOptionsHeader}', i);
 
   if res then begin
     Log('ParseManifestOptions(): [Options] header found.');
@@ -267,9 +300,7 @@ var
   count: Integer;
   i: Integer;
   j: Integer;
-  k: Integer;
   header: String;
-  foundHeader: Boolean;
 begin
   Log('ParseManifestLocations(): Beginning function.');
   res := True;
@@ -283,23 +314,7 @@ begin
     header := '[' + Options[i].Option.Key + ']';
     Log('ParseManifestLocations(): Trying to find ' + header + ' in the manifest file.');
 
-    (* The whole next block of code is absolutely stupid. In
-    ParseManifestOptions() above I use TStringList.Find() and it works just
-    fine. For some reason, it won't work when trying to search for the 'header'
-    variable assigned above. Makes zero sense. So, I brute force it below
-    instead. Totally lame, but whatcha gonna do? *)
-    foundHeader := False;
-    k := 0;
-    while (not foundHeader) and (k < Manifest.Count) do begin
-      Log('ParseManifestLocations(): Checking Manifest line ' + IntToStr(k) + ', ' + Manifest[k] + ' against ' + header + '.');
-      if Manifest[k] = header then begin
-        locSectionLine := k;
-        foundHeader := True
-      end;
-      k := k + 1;
-    end;
-
-    if foundHeader then begin
+    if FindInTStringList(Manifest, header, locSectionLine) then begin
       Log('ParseManifestLocations(): Found ' + header + ' in the manifest file.');
       done := False;
       j := locSectionLine;

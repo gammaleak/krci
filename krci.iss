@@ -213,8 +213,7 @@ begin
   count := 0;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ManifestLocation);
-  (* TODO: Take proof-of-concept parsing currently in  ParseManifest and make
-  it specific to parsing the Options section. *)
+
   res := Manifest.Find('{#ManifestOptionsHeader}', i);
 
   if res then begin

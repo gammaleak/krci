@@ -253,15 +253,6 @@ begin
     res := ParseManifestLocations()
   end;
 
-  (* TODO: Take this proof-of-concept code and split it out into handling the
-  the Options section and individual Locations sections separately
-  for i := 1 to 4 do begin
-    SplitManifestKeyValuePair(Manifest[i], key, value);
-    MsgBox(Manifest[i], mbInformation, MB_OK);
-    MsgBox(key, mbInformation, MB_OK);
-    MsgBox(value, mbInformation, MB_OK);
-  end;
-  *)
   Log('ParseManifest(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;

@@ -18,8 +18,11 @@
 #define ManifestLocalFilename "{src}\krcimanifest.ini"
 #define ManifestTempFilename "{tmp}\krcimanifest.ini"
 #define ManifestOptionsHeader "[Options]"
-#define ManifestVerControlOption = "MinVer"
 #define ManifestKeyValueSeparator "="
+#define ManifestBooleanTrue = "Yes"
+#define ManifestOptionVerControl = "MinVer"
+#define ManifestOptionRequired = "Required"
+#define ManifestOptionExclusive = "Exclusive"
 
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
@@ -80,6 +83,8 @@ type
     *) 
 
     Option: MItem;
+    Required: Boolean;
+    Exclusive: Boolean;
     Locations: array of MItem;
   end;
 
@@ -222,7 +227,7 @@ begin
       if not SplitManifestKeyValuePair(Manifest[i], key, value) then begin
         done := True;
       end else begin
-        if key = '{#ManifestVerControlOption}' then begin
+        if key = '{#ManifestOptionVerControl}' then begin
           ManVerControl.Key := key;
           ManVerControl.Value := value;
         end else begin
@@ -307,10 +312,32 @@ begin
           done := True;
           SetArrayLength(Options[i].Locations, count);
         end else begin
-          Options[i].Locations[count].Key := key;
-          Options[i].Locations[count].Value := value;
-          Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Value = ' + value + '.');
-          count := count + 1;
+          case key of
+            '{#ManifestOptionRequired}' : begin
+              if value = '{#ManifestBooleanTrue}' then begin
+                Options[i].Required := True;
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = True');
+              end else begin
+                Options[i].Required := False;
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = False');
+              end;
+            end;
+            '{#ManifestOptionExclusive}' : begin
+              if value = '{#ManifestBooleanTrue}' then begin
+                Options[i].Exclusive := True;
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = True');
+              end else begin
+                Options[i].Exclusive := False;
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = False');
+              end;
+            end;
+            else begin
+              Options[i].Locations[count].Key := key;
+              Options[i].Locations[count].Value := value;
+              Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Value = ' + value + '.');
+              count := count + 1;
+            end;
+          end;
         end;
       end;
     end else

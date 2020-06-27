@@ -24,6 +24,15 @@
 #define ManifestOptionRequired = "Required"
 #define ManifestOptionExclusive = "Exclusive"
 
+#define StrNewLine = "#13#10"
+
+#define WizTextIntroCaption = "Kujata Reborn Installation Overview"
+#define WizTextIntroDescription = "Here is a quick overview of the installation:"
+#define WizTextIntroMsgDownload = "You are about to install all the necessary files to play on the Final Fantasy XI private server, Kujata Reborn (kujatareborn.com). This installer will download the required installation files from the internet and install them on your machine. Please remain connected to the internet throughout the installation process."
+#define WizTextIntroMsgRequired = "The following items are required to play on Kujata Reborn and will be downloaded and installed:"
+#define WizTextIntroMsgOptions = "The next screen(s) will allow you to choose some elements of your installation."
+#define WizTextIntroMsgHelp = "If you need assistance with this installer, please join our Discord (https://discord.com/invite/uBWtbz) and go ask for help in the ?helpdesk room."
+
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
 AppName={#TheAppName}
@@ -85,6 +94,7 @@ type
     Option: MItem;
     Required: Boolean;
     Exclusive: Boolean;
+    Selected: Boolean;
     Locations: array of MItem;
   end;
 
@@ -393,8 +403,8 @@ end;
 
 function InitializeSetup(): Boolean;
 (* Locates the manifest file and parses it before the setup GUI is displayed.
-See the Inno Setup documentation for futher details on this special event in
-the Inno Setup system.
+Also initializes the custom GUI pages. See the Inno Setup documentation for
+futher details on this special event in the Inno Setup system.
 
 Parameters: 
 (none)
@@ -411,7 +421,7 @@ begin
   res := RetrieveManifest();
 
   if res then begin
-    ParseManifest();
+    res := ParseManifest();
   end;
 
   if not res then begin
@@ -420,4 +430,86 @@ begin
 
   Log('InitializeSetup(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
+end;
+
+procedure InitializeWizard;
+(* Initializes the custom GUI pages for the installer.
+
+Parameters: 
+(none)
+
+Returns:
+Boolean: True if initialization was succesful. False if not.
+*)
+var
+  res: Boolean;
+  introPage: TOutputMsgWizardPage;
+  introMsg: String;
+  optionsPages: array of TInputOptionWizardPage;
+  prevPage: Integer;
+  matchingPage: Integer;
+  trueOption: Boolean;
+  i: Integer;
+  j: Integer;
+begin
+  introMsg := '{#WizTextIntroMsgDownload}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgRequired}'
+
+
+  (* Make all options set to unselected. *)
+  for i := 0 to GetArrayLength(Options) - 1 do begin
+    Options[i].Selected := False;
+  end;
+
+  (* Now look for true options with more than one choice. If there is no actual
+  because it's a required option and there's only one version, then set it to
+  Selected := True right away and skip making an option page for it later. *)
+  for i := 0 to GetArrayLength(Options) - 1 do begin
+    for j := (i + 1) to GetArrayLength(Options) - 1 do begin
+      if Options[i].Option.Key = Options[j].Option.Key then begin
+        trueOption := True;
+      end;
+    end;
+
+    if not trueOption and Options[i].Required then begin
+      Options[i].Selected := True;
+      introMsg := introMsg + {#StrNewLine} + '- ' + Options[i].Option.Key;
+    end;
+  end;
+
+  prevPage := wpWelcome;
+
+  SetArrayLength(optionsPages, GetArrayLength(Options));
+
+  for i := 0 to GetArrayLength(Options) - 1 do begin
+    matchingPage := -1;
+    j := 0;
+
+    while (matchingPage < 0) and (j < GetArrayLength(optionsPages)-1) do begin
+      Log('InitializeWizard(): Looking for a matchingPage at optionsPages[' + IntToStr(j) + '].');
+      if Assigned(optionsPages[j]) then begin
+        Log('InitializeWizard(): Comparing optionsPages[j].Caption=' + optionsPages[j].Caption + ' with Options[i].Option.Key=' + Options[i].Option.Key + '.');
+        if optionsPages[j].Caption = Options[i].Option.Key then begin
+          Log('InitializeWizard(): Matching page found at Comparing optionsPages[' + IntToStr(j) + '].');
+          matchingPage := j;
+        end;
+      end;
+      j := j + 1;
+    end;
+    
+    if matchingPage > -1 then begin
+      optionsPages[matchingPage].Add(Options[i].Option.Value);
+    end else begin
+      if not Options[i].Selected then begin
+        optionsPages[i] := CreateInputOptionPage(prevPage, Options[i].Option.Key, 'Choose a ' + Options[i].Option.Key + ' to download and install.', '', Options[i].Exclusive, False);
+        optionsPages[i].Add(Options[i].Option.Value);
+        optionsPages[i].Values[0] := True;
+        prevPage := optionsPages[i].ID;
+      end;
+    end;    
+  end;
+
+  introMsg := introMsg + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgOptions}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgHelp}'
+
+  introPage := CreateOutputMsgPage(wpWelcome, '{#WizTextIntroCaption}', '', introMsg);
+
 end;

@@ -461,8 +461,9 @@ begin
   end;
 
   (* Now look for true options with more than one choice. If there is no actual
-  because it's a required option and there's only one version, then set it to
-  Selected := True right away and skip making an option page for it later. *)
+  choice because it's a required option and there's only one version, then set
+  it to Selected := True right away and skip making an option page for it
+  later. *)
   for i := 0 to GetArrayLength(Options) - 1 do begin
     for j := (i + 1) to GetArrayLength(Options) - 1 do begin
       if Options[i].Option.Key = Options[j].Option.Key then begin

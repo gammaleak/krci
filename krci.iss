@@ -432,14 +432,18 @@ begin
   Result := res;
 end;
 
-procedure InitializeWizard;
-(* Initializes the custom GUI pages for the installer.
+function InitializeOptionsPages(var lastOptionsPageId: Integer): Boolean;
+(* Initializes the intro and options pages shown at the beginning of the
+installation process.
 
-Parameters: 
-(none)
+Parameters:
+lastOptionsPageId: Integer ID for the last options page created. This
+                   makes it so that future custom pages can be inserted
+                   after this one. Returns the value back to the calling
+                   function.
 
 Returns:
-Boolean: True if initialization was succesful. False if not.
+Boolean: True if initializing the pages was successful. False if not.
 *)
 var
   res: Boolean;
@@ -452,6 +456,8 @@ var
   i: Integer;
   j: Integer;
 begin
+  res := True;
+
   introMsg := '{#WizTextIntroMsgDownload}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgRequired}'
 
 
@@ -516,4 +522,25 @@ begin
 
   introPage := CreateOutputMsgPage(wpWelcome, '{#WizTextIntroCaption}', '', introMsg);
 
+  (* It's not clear that there actually is a failure condition other than any
+  uncaught exception, which will error out of the installer anyway. *)
+  Result := res;
+end;
+
+procedure InitializeWizard;
+(* Initializes the custom GUI pages for the installer.
+
+Parameters: 
+(none)
+
+Returns:
+Boolean: True if initialization was succesful. False if not.
+*)
+var
+  res: Boolean;
+  lastOptionsPageId: Integer;
+begin
+
+  res := InitializeOptionsPages(lastOptionsPageId);
+ 
 end;

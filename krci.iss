@@ -481,6 +481,9 @@ begin
 
   SetArrayLength(optionsPages, GetArrayLength(Options));
 
+  (* If there's more than one choice for a given option, and that option
+  already has a selection page, discover that and then add that choice to the
+  existing page. Otherwise, create a new options page as needed. *)
   for i := 0 to GetArrayLength(Options) - 1 do begin
     matchingPage := -1;
     j := 0;

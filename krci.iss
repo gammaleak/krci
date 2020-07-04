@@ -34,11 +34,6 @@
 #define WizTextIntroMsgOptions = "The next screen(s) will allow you to choose some elements of your installation."
 #define WizTextIntroMsgHelp = "If you need assistance with this installer, please join our Discord (https://discord.com/invite/uBWtbz) and go ask for help in the ?helpdesk room."
 
-#define WizTextProgressCaption = "Downloading Installation Data"
-#define WizTextProgressDescription = "The installer is downloading your installation data from the internet. Please be patient as this may take some time. Do not disconnect from the internet. The displayed progress is in relation to the number of files being downloaded, not the overall size of the download."
-#define WizTextProgressActionPrefix = "Downloading"
-#define WizTextProgressActionPostfix = "files..."
-
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
 AppName={#TheAppName}

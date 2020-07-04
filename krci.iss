@@ -105,7 +105,6 @@ var
   ManifestLocation: String;   (* Manifest file actually used for setup *)
   ManVerControl: MItem;       (* Version control data from the manifest *)
   Options: array of MOption;  (* Parsed data from the manifest *)
-  ProgressPage: TOutputProgressWizardPage; (* Download progress wizard page *)
 
 
 (* Functions and Procedures *)
@@ -608,10 +607,6 @@ var
 begin
 
   res := InitializeOptionsPages(lastOptionsPageId);
-
-  if res then begin
-    ProgressPage := CreateOutputProgressPage('{#WizTextProgressCaption}', '{#WizTextProgressDescription}');
-  end;
  
 end;
 

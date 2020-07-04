@@ -23,15 +23,21 @@
 #define ManifestOptionVerControl = "MinVer"
 #define ManifestOptionRequired = "Required"
 #define ManifestOptionExclusive = "Exclusive"
+#define ManifestOptionExtension = "Extension"
 
 #define StrNewLine = "#13#10"
 
 #define WizTextIntroCaption = "Kujata Reborn Installation Overview"
 #define WizTextIntroDescription = "Here is a quick overview of the installation:"
-#define WizTextIntroMsgDownload = "You are about to install all the necessary files to play on the Final Fantasy XI private server, Kujata Reborn (kujatareborn.com). This installer will download the required installation files from the internet and install them on your machine. Please remain connected to the internet throughout the installation process."
+#define WizTextIntroMsgDownload = "You are about to install all the necessary files to play on the Final Fantasy XI private server, Kujata Reborn (kujatareborn.com). This installer will download the required installation files from the internet and install them on your machine. Please remain connected to the internet throughout the installation process (a wired connection would be advisable)."
 #define WizTextIntroMsgRequired = "The following items are required to play on Kujata Reborn and will be downloaded and installed:"
 #define WizTextIntroMsgOptions = "The next screen(s) will allow you to choose some elements of your installation."
 #define WizTextIntroMsgHelp = "If you need assistance with this installer, please join our Discord (https://discord.com/invite/uBWtbz) and go ask for help in the ?helpdesk room."
+
+#define WizTextProgressCaption = "Downloading Installation Data"
+#define WizTextProgressDescription = "The installer is downloading your installation data from the internet. Please be patient as this may take some time. Do not disconnect from the internet. The displayed progress is in relation to the number of files being downloaded, not the overall size of the download."
+#define WizTextProgressActionPrefix = "Downloading"
+#define WizTextProgressActionPostfix = "files..."
 
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
@@ -95,6 +101,7 @@ type
     Required: Boolean;
     Exclusive: Boolean;
     Selected: Boolean;
+    Extension: String;
     Locations: array of MItem;
   end;
 
@@ -102,7 +109,8 @@ type
 var
   ManifestLocation: String;   (* Manifest file actually used for setup *)
   ManVerControl: MItem;       (* Version control data from the manifest *)
-  Options: array of MOption; (* Parsed data from the manifest *)
+  Options: array of MOption;  (* Parsed data from the manifest *)
+  ProgressPage: TOutputProgressWizardPage; (* Download progress wizard page *)
 
 
 (* Functions and Procedures *)
@@ -144,6 +152,65 @@ begin
   end;
   
   Result := foundStr;  
+end;
+
+function RetrieveFileExtension(const str: String; var ext: String): Boolean;
+(* Finds the extension of a file and writes it back to the ext parameter
+
+Parameters:
+str: A filename or URL
+ext: Passed to receive back the found extension
+
+Returns:
+Boolean: True if an extension is found. False if there's no extension.
+*) 
+var
+  res: Boolean;
+  dotLoc: Integer;
+begin
+  res := True;
+  dotLoc := Length(str) - 3;
+  if str[dotLoc] = '.' then begin
+    ext := Copy(str, dotLoc+1, 3);
+  end else begin
+    res := False;
+  end;
+
+  Result := res;  
+end;
+
+function ShortFilenameFromURL(const url: String; var filename: String): Boolean;
+(* Finds the short filename (i.e., without the fully qualified directory) from
+a given URL
+
+Parameters
+url: The URL from which to get the filename.
+filename: Passed to receive back the found filename.
+
+Returns:
+Boolean: True if a filename is found. False if no filename is found
+*)
+var
+  res: Boolean;
+  i: Integer;
+  lastSlashPos: Integer;
+begin
+  res := True;
+  lastSlashPos := -1;
+
+  for i := 1 to Length(url) do begin
+    if url[i] = '/' then begin
+      lastSlashPos := i;
+    end;
+  end;
+
+  if lastSlashPos < 0 then begin
+    res := False;
+  end else begin
+    filename := Copy(url, lastSlashPos + 1, Length(url) - lastSlashPos);
+  end;
+
+  Result := res;
 end;
 
 function RetrieveManifest(): Boolean;
@@ -340,20 +407,24 @@ begin
             '{#ManifestOptionRequired}' : begin
               if value = '{#ManifestBooleanTrue}' then begin
                 Options[i].Required := True;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = True');
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = True.');
               end else begin
                 Options[i].Required := False;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = False');
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = False.');
               end;
             end;
             '{#ManifestOptionExclusive}' : begin
               if value = '{#ManifestBooleanTrue}' then begin
                 Options[i].Exclusive := True;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = True');
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = True.');
               end else begin
                 Options[i].Exclusive := False;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = False');
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = False.');
               end;
+            end;
+            '{#ManifestOptionExtension}' : begin
+              Log('ParseManifestLocations(): Intended extension for this URL Location = ' + value + '.');
+              Options[i].Extension := value;
             end;
             else begin
               Options[i].Locations[count].Key := key;
@@ -542,5 +613,102 @@ var
 begin
 
   res := InitializeOptionsPages(lastOptionsPageId);
+
+  if res then begin
+    ProgressPage := CreateOutputProgressPage('{#WizTextProgressCaption}', '{#WizTextProgressDescription}');
+  end;
  
+end;
+
+function IsInstallDataPresent() : Boolean;
+(* Looks for the install data defined in the manifest file to see if it's
+already downloaded or if it's in the working directory.
+
+Parameters:
+(none)
+
+Returns:
+Boolean: True if the data is already present. False if not
+*)
+begin
+  (* TODO: Actually code out this function so that it does as described. *)
+  Result := False;
+end;
+
+function PrepareToDownloadInstallData(): Boolean;
+(* Downloads the selected installation data. This function also handles all
+the wizard progress screen updates, so it should not be called arbitrarily.
+Call this function only from an appropriate point to process this data. Also,
+note that if any of the file locations do not end with the actual filename,
+(e.g., Google Drive links) and have more than one location (e.g., a multi-part
+archive), this function is likely to fail spectacularly to reproduce the files
+in a way that will work. So don't do that.
+
+Parameters:
+(none)
+
+Returns:
+Boolean: Returns True if the download was successful. False if it was not.
+*)
+var
+  res: Boolean;
+  filename: String;
+  fileExtension: String;
+  i: Integer;
+  j: Integer;
+begin
+  res := True;
+
+  for i := 0 to GetArrayLength(Options) - 1 do begin
+    if Options[i].Selected then begin
+      for j := 0 to GetArrayLength(Options[i].Locations) - 1 do begin
+        Log('PrepareToDownloadInstallData(): Looking for short filename in ' + Options[i].Locations[j].Value + '.');
+        if ShortFilenameFromURL(Options[i].Locations[j].Value, filename) then begin
+          Log('PrepareToDownloadInstallData(): Downloading ' + filename + ' from ' + Options[i].Locations[j].Value + '.');
+
+          if not RetrieveFileExtension(filename, fileExtension) then begin
+            filename := Options[i].Locations[j].Key + '.' + Options[i].Extension;
+            Log('PrepareToDownloadInstallDate(): Modifying filename to ' + filename + '.');
+          end;
+
+          idpAddFile(Options[i].Locations[j].Value, ExpandConstant('{tmp}\' + filename));
+        end;
+      end;
+    end;
+  end;
+
+  idpDownloadAfter(wpSelectDir);
+
+  Result := res;
+end; 
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+(* Handles what to do based on which page the user just clicked "next" on.
+
+Parameters:
+CurPageID: The ID of the current page (i.e., the one that was showing when the
+           user clicked "Next").
+
+Returns:
+Boolean: Returning True will cause the wizard to move to the next page.
+         Returning False will cause the wizard to stay on the page it's on.
+*)
+var
+  res: Boolean;
+  i: Integer;
+begin
+  case CurPageID of
+    wpSelectDir : begin
+      if not IsInstallDataPresent() then begin
+        PrepareToDownloadInstallData();
+      end;
+      res := True;
+    end;
+    
+    else begin
+      res := True;
+    end;
+  end;
+
+  Result := res;
 end;

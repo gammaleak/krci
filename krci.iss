@@ -685,7 +685,6 @@ Boolean: Returning True will cause the wizard to move to the next page.
 *)
 var
   res: Boolean;
-  i: Integer;
 begin
   case CurPageID of
     wpSelectDir : begin

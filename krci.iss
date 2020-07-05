@@ -98,6 +98,8 @@ type
     Selected: Boolean;
     Extension: String;
     Locations: array of MItem;
+    WizardPage: TInputOptionWizardPage;
+    WizardListIndex: Integer;
   end;
 
 (* Global variables *)
@@ -395,7 +397,6 @@ begin
         j := j + 1;
         if not SplitManifestKeyValuePair(Manifest[j], key, value) then begin
           done := True;
-          SetArrayLength(Options[i].Locations, count);
         end else begin
           case key of
             '{#ManifestOptionRequired}' : begin
@@ -421,14 +422,20 @@ begin
               Options[i].Extension := value;
             end;
             else begin
-              Options[i].Locations[count].Key := key;
-              Options[i].Locations[count].Value := value;
-              Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Value = ' + value + '.');
-              count := count + 1;
+              if key = Options[i].Option.Value then begin
+                Options[i].Locations[count].Key := key;
+                Options[i].Locations[count].Value := value;
+                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Value = ' + value + '.');
+                count := count + 1;
+              end;
             end;
           end;
         end;
       end;
+
+      Log('ParseManifestLocations(): Setting Options[' + IntToStr(i) + '].Locations array length to ' + IntToStr(count) + '.');
+      SetArrayLength(Options[i].Locations, count);
+
     end else
       Log('ParseManifestLocations(): Did not find ' + header + ' in the manifest file.');
   end;
@@ -513,15 +520,14 @@ Boolean: True if initializing the pages was successful. False if not.
 var
   res: Boolean;
   introPage: TOutputMsgWizardPage;
-  introMsg: String;
-  optionsPages: array of TInputOptionWizardPage;
+  introMsg: String; 
   prevPage: Integer;
-  matchingPage: Integer;
   trueOption: Boolean;
   i: Integer;
   j: Integer;
 begin
   res := True;
+  prevPage := wpWelcome;
 
   introMsg := '{#WizTextIntroMsgDownload}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgRequired}'
 
@@ -529,58 +535,46 @@ begin
   (* Make all options set to unselected. *)
   for i := 0 to GetArrayLength(Options) - 1 do begin
     Options[i].Selected := False;
+    Options[i].WizardListIndex := -1;
   end;
 
   (* Now look for true options with more than one choice. If there is no actual
   choice because it's a required option and there's only one version, then set
-  it to Selected := True right away and skip making an option page for it
-  later. *)
+  it to Selected := True right away and skip making an option page for it.*)
   for i := 0 to GetArrayLength(Options) - 1 do begin
     for j := (i + 1) to GetArrayLength(Options) - 1 do begin
       if Options[i].Option.Key = Options[j].Option.Key then begin
         trueOption := True;
+        if not Assigned(Options[i].WizardPage) then begin
+          Options[i].WizardPage := CreateInputOptionPage(prevPage, Options[i].Option.Key, 'Choose a ' + Options[i].Option.Key + ' to download and install.', '', Options[i].Exclusive, False);
+          prevPage := Options[i].WizardPage.ID;
+          Options[i].WizardListIndex := Options[i].WizardPage.Add(Options[i].Option.Value);
+          Options[i].WizardPage.Values[Options[i].WizardListIndex] := True;
+        end;
+        if Options[i].WizardListIndex < 0 then begin
+          Options[i].WizardListIndex := Options[i].WizardPage.Add(Options[i].Option.Value);
+        end;
+        if not Assigned(Options[j].WizardPage) then begin
+          Options[j].WizardPage := Options[i].WizardPage;
+        end;
+        if Options[j].WizardListIndex < 0 then begin
+          Options[j].WizardListIndex := Options[j].WizardPage.Add(Options[j].Option.Value);
+        end;
       end;
     end;
 
     if not trueOption and Options[i].Required then begin
       Options[i].Selected := True;
       introMsg := introMsg + {#StrNewLine} + '- ' + Options[i].Option.Key;
-    end;
-  end;
-
-  prevPage := wpWelcome;
-
-  SetArrayLength(optionsPages, GetArrayLength(Options));
-
-  (* If there's more than one choice for a given option, and that option
-  already has a selection page, discover that and then add that choice to the
-  existing page. Otherwise, create a new options page as needed. *)
-  for i := 0 to GetArrayLength(Options) - 1 do begin
-    matchingPage := -1;
-    j := 0;
-
-    while (matchingPage < 0) and (j < GetArrayLength(optionsPages)-1) do begin
-      Log('InitializeWizard(): Looking for a matchingPage at optionsPages[' + IntToStr(j) + '].');
-      if Assigned(optionsPages[j]) then begin
-        Log('InitializeWizard(): Comparing optionsPages[j].Caption=' + optionsPages[j].Caption + ' with Options[i].Option.Key=' + Options[i].Option.Key + '.');
-        if optionsPages[j].Caption = Options[i].Option.Key then begin
-          Log('InitializeWizard(): Matching page found at Comparing optionsPages[' + IntToStr(j) + '].');
-          matchingPage := j;
-        end;
-      end;
-      j := j + 1;
-    end;
-    
-    if matchingPage > -1 then begin
-      optionsPages[matchingPage].Add(Options[i].Option.Value);
     end else begin
-      if not Options[i].Selected then begin
-        optionsPages[i] := CreateInputOptionPage(prevPage, Options[i].Option.Key, 'Choose a ' + Options[i].Option.Key + ' to download and install.', '', Options[i].Exclusive, False);
-        optionsPages[i].Add(Options[i].Option.Value);
-        optionsPages[i].Values[0] := True;
-        prevPage := optionsPages[i].ID;
+      (* There isn't more than one choice, but it isn't a requirement, so the
+      user still gets the opportunity to check the box or not check the box. *)
+      if not Assigned(Options[i].WizardPage) then begin
+        Options[i].WizardPage :=  CreateInputOptionPage(prevPage, Options[i].Option.Key, 'Choose whether to download and install the ' + Options[i].Option.Key + '.', '', Options[i].Exclusive, False);
+        Options[i].WizardListIndex := Options[i].WizardPage.Add(Options[i].Option.Value);
+        prevPage := Options[i].WizardPage.ID;
       end;
-    end;    
+    end;
   end;
 
   introMsg := introMsg + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgOptions}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgHelp}'
@@ -650,8 +644,13 @@ begin
   res := True;
 
   for i := 0 to GetArrayLength(Options) - 1 do begin
+    Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Selected == ' + BoolToStr(Options[i].Selected) + '.');
     if Options[i].Selected then begin
       for j := 0 to GetArrayLength(Options[i].Locations) - 1 do begin
+        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Option.Key == ' + Options[i].Option.Key + '.');
+        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Option.Value == ' + Options[i].Option.Value + '.');
+        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Locations[' + IntToStr(j) + '].Key == ' + Options[i].Locations[j].Key + '.');
+        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Locations[' + IntToStr(j) + '].Value == ' + Options[i].Locations[j].Value + '.');
         Log('PrepareToDownloadInstallData(): Looking for short filename in ' + Options[i].Locations[j].Value + '.');
         if ShortFilenameFromURL(Options[i].Locations[j].Value, filename) then begin
           Log('PrepareToDownloadInstallData(): Downloading ' + filename + ' from ' + Options[i].Locations[j].Value + '.');
@@ -685,6 +684,7 @@ Boolean: Returning True will cause the wizard to move to the next page.
 *)
 var
   res: Boolean;
+  i: Integer;
 begin
   case CurPageID of
     wpSelectDir : begin
@@ -695,6 +695,16 @@ begin
     end;
     
     else begin
+      for i := 0 to GetArrayLength(Options) - 1 do begin
+        if Assigned(Options[i].WizardPage) then begin
+          if CurPageID = Options[i].WizardPage.ID then begin
+            if Options[i].WizardPage.Values[Options[i].WizardListIndex] = True then begin
+              Log('NextButtonClick(): Options[' + IntToStr(i) + '].WizardPage.Values[Options[' + IntToStr(i) + '].WizardListIndex] was found to be True. Therefore ' + Options[i].Option.Value + ' is Selected.');
+              Options[i].Selected := True;
+            end;
+          end;
+        end;
+      end;
       res := True;
     end;
   end;

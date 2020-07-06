@@ -125,6 +125,7 @@ var
   IntroPage: TOutputMsgWizardPage; (* Informs user about install process *)
   CleanOptionPage: TInputOptionWizardPage; (* Option to uninstall prev FFXI *)
   CleanNotificationPage: TOutputMsgWizardPage; (* Notifies user of removal *)
+  ActionProgressPage: TOutputProgressWizardPage; (* Progress thru actions *)
 
 
 (* Functions and Procedures *)
@@ -682,6 +683,11 @@ begin
     res := InitializeCleanNotificationPage();
   end;
 
+  if res then begin
+    ActionProgressPage := CreateOutputProgressPage('CAPTION', 'DESCRIPTION');
+    ActionProgressPage.SetText('SET TEXT FIRST', 'SET TEXT SECOND');
+  end;
+
 end;
 
 function IsInstallDataPresent() : Boolean;
@@ -750,7 +756,51 @@ begin
   idpDownloadAfter(afterPageId);
 
   Result := res;
-end; 
+end;
+
+function ProcessActions(): Boolean;
+(* Processes all the actions for options in that manifest file that were
+selected.
+
+Parameters:
+(none)
+
+Returns:
+Boolean: True if all actions were processed successfully. False if not.
+*)
+var
+  res: Boolean;
+  numOptions: Integer;
+  numActions: Integer;
+  i: Integer;
+  j: Integer;
+  execResult: Integer;
+begin
+  res := True;
+  numOptions := GetArrayLength(Options);
+  ActionProgressPage.Show;
+  try begin
+    for i := 0 to numOptions - 1 do begin
+      if Options[i].Selected then begin
+        numActions := GetArrayLength(Options[i].InstallActions) - 1
+        for j := 0 to numActions do begin
+          Log('ProcessActions(): Working on Option ' + IntToStr(i) + ' of ' + IntToStr(numOptions) + ' and Action ' + IntToStr(j) + ' of ' + IntToStr(numActions) + '.');
+          ActionProgressPage.SetText('Processing actions to install ' + Options[i].Option.Key, 'Action: ' + ExpandConstant(Options[i].InstallActions[j]));
+          ActionProgressPage.SetProgress(j, numActions);
+          Log('ProcessActions(): Executing ' + Options[i].Option.Key + ' Action: ' + ExpandConstant(Options[i].InstallActions[j]));
+          res := Exec('>', ExpandConstant(Options[i].InstallActions[j]), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
+          if not res then begin
+            MsgBox('ProcessActions():' + {#StrNewLine} + {#StrNewLine} + 'Action: ' + ExpandConstant(Options[i].InstallActions[j]) + {#StrNewLine} + {#StrNewLine} + 'execResult: ' + IntToStr(execResult), mbInformation, MB_OK);
+          end;
+        end;
+      end;
+    end;
+  end finally
+    ActionProgressPage.Hide;
+  end;
+
+  Result := res;
+end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 (* Handles what to do based on which page the user just clicked "next" on.
@@ -784,6 +834,9 @@ begin
         PrepareToDownloadInstallData(CleanNotificationPage.ID);
       end;
       res := True;
+    end;
+    wpReady : begin
+      res := ProcessActions();
     end;    
     else begin
       for i := 0 to GetArrayLength(Options) - 1 do begin

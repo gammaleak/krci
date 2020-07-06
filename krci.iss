@@ -656,7 +656,7 @@ begin
   res := True;
 
   if CleanOptionPage.SelectedValueIndex = 0 then begin
-    CleanNotificationPage := CreateOutputMsgPage(wpSelectDir, '{#WizTextCleanNotifyCaption}', '', '{#WizTextCleanNotifyMessage}');
+    CleanNotificationPage := CreateOutputMsgPage(wpReady, '{#WizTextCleanNotifyCaption}', '', '{#WizTextCleanNotifyMessage}');
   end;
 
   Result := res;
@@ -817,14 +817,18 @@ Boolean: Returning True will cause the wizard to move to the next page.
 *)
 var
   res: Boolean;
-  i: Integer;
+  idpPageId: Integer;
   execResult: Integer;
+  i: Integer;
 begin
+  idpPageId := -1
+
   case CurPageID of
     wpSelectDir : begin
       if CleanOptionPage.SelectedValueIndex = 1 then begin
         if not IsInstallDataPresent() then begin
           PrepareToDownloadInstallData(wpSelectDir);
+          idpPageId := IDPForm.Page.ID;
         end;
       end;
       res := True; 
@@ -834,11 +838,9 @@ begin
       Exec('>', '{#CleanUninstallCommandFFXI}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
       if not IsInstallDataPresent() then begin
         PrepareToDownloadInstallData(CleanNotificationPage.ID);
+        idpPageId := IDPForm.Page.ID;
       end;
       res := True;
-    end;
-    wpReady : begin
-      res := ProcessActions();
     end;    
     else begin
       for i := 0 to GetArrayLength(Options) - 1 do begin
@@ -856,4 +858,26 @@ begin
   end;
 
   Result := res;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+(* An event function of Inno Setup, this is called when the installation step
+has changed. For our purposes, used to discover when the installation step has
+been reached. Then we start processing the installation actions.
+
+Parameters
+CurStep: A TSetupStep which will be the installation step to which the sytem
+         has just changed.
+
+Returns:
+(n/a)
+*)
+begin
+  case CurStep of
+    ssInstall : begin
+      ProcessActions();
+    end;
+    else begin
+    end;
+  end;
 end;

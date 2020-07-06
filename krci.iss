@@ -48,6 +48,9 @@
 #define CleanUninstallCommandPOLV = "msiexec /passive /x {81784E3A-1BDA-4743-B5F8-04E59DC7E031}"
 #define CleanUninstallCommandFFXI = "msiexec /passive /x {07EB4C8B-3869-49B4-8CF8-D6D9FB8C8026}"
 
+#define WizTextActionProgressCaption = "Installing Kujata Reborn Client Software"
+#define WizTextActionProgressDescription = "The installer is now working to install all necessary and chosen components of your client installation."
+
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
 AppName={#TheAppName}
@@ -684,8 +687,7 @@ begin
   end;
 
   if res then begin
-    ActionProgressPage := CreateOutputProgressPage('CAPTION', 'DESCRIPTION');
-    ActionProgressPage.SetText('SET TEXT FIRST', 'SET TEXT SECOND');
+    ActionProgressPage := CreateOutputProgressPage('{#WizTextActionProgressCaption}', '{#WizTextActionProgressDescription}');
   end;
 
 end;

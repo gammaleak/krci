@@ -35,6 +35,19 @@
 #define WizTextIntroMsgOptions = "The next screen(s) will allow you to choose some elements of your installation."
 #define WizTextIntroMsgHelp = "If you need assistance with this installer, please join our Discord (https://discord.com/invite/uBWtbz) and go ask for help in the ?helpdesk room."
 
+#define WizTextCleanOptionCaption = "Remove Previous FFXI Installation"
+#define WizTextCleanOptionDescription = "This installer will not complete successfully if you have an existing installation of Final Fantasy XI and the PlayOnline Viewer. They must be uninstalled first or this installer will fail."
+#define WizTextCleanOptionSubcaption = "Do you want the Kujata Reborn Client Installer to uninstall any previous Final Fantasy XI and PlayOnline Viewer installations?"                                                                                                                                                                                 
+#define WizTextCleanOptionYes = "Yes"
+#define WizTextCleanOptionNo = "No"
+
+#define WizTextCleanNotifyCaption = "Removal of Previous Installation"
+#define WizTextCleanNotifyDescription = ""
+#define WizTextCleanNotifyMessage = "The Kujata Reborn Client Installer will now remove any existing PlayOnline Viewer and Final Fantasy XI installations."
+
+#define CleanUninstallCommandPOLV = "msiexec /passive /x {81784E3A-1BDA-4743-B5F8-04E59DC7E031}"
+#define CleanUninstallCommandFFXI = "msiexec /passive /x {07EB4C8B-3869-49B4-8CF8-D6D9FB8C8026}"
+
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
 AppName={#TheAppName}
@@ -109,6 +122,9 @@ var
   ManifestLocation: String;   (* Manifest file actually used for setup *)
   ManVerControl: MItem;       (* Version control data from the manifest *)
   Options: array of MOption;  (* Parsed data from the manifest *)
+  IntroPage: TOutputMsgWizardPage; (* Informs user about install process *)
+  CleanOptionPage: TInputOptionWizardPage; (* Option to uninstall prev FFXI *)
+  CleanNotificationPage: TOutputMsgWizardPage; (* Notifies user of removal *)
 
 
 (* Functions and Procedures *)
@@ -531,7 +547,6 @@ Boolean: True if initializing the pages was successful. False if not.
 *)
 var
   res: Boolean;
-  introPage: TOutputMsgWizardPage;
   introMsg: String; 
   prevPage: Integer;
   trueOption: Boolean;
@@ -591,10 +606,55 @@ begin
 
   introMsg := introMsg + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgOptions}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgHelp}'
 
-  introPage := CreateOutputMsgPage(wpWelcome, '{#WizTextIntroCaption}', '', introMsg);
+  IntroPage := CreateOutputMsgPage(wpWelcome, '{#WizTextIntroCaption}', '', introMsg);
 
   (* It's not clear that there actually is a failure condition other than any
   uncaught exception, which will error out of the installer anyway. *)
+  Result := res;
+end;
+
+function InitializeCleanOptionPage(): Boolean;
+(* Initializes a wizard page that gives the user the option to uninstall any
+previous Final Fantasy XI installation
+
+Parameters:
+(none)
+
+Returns:
+Boolean True if initialization was successful. False if not.
+*)
+var
+  res: Boolean;
+begin
+  res := True;
+
+  CleanOptionPage := CreateInputOptionPage(IntroPage.ID, '{#WizTextCleanOptionCaption}', '{#WizTextCleanOptionDescription}', '{#WizTextCleanOptionSubcaption}', True, False);
+  CleanOptionPage.Add('{#WizTextCleanOptionYes}');
+  CleanOptionPage.Add('{#WizTextCleanOptionNo}');
+  CleanOptionPage.SelectedValueIndex := 0;
+
+  Result := res;
+end;
+
+function InitializeCleanNotificationPage(): Boolean;
+(* Initializes a wizard page that notifies the user that existing PlayOnline
+Viewer and Final Fantasy XI installations are about to be removed.
+
+Parameters:
+(none)
+
+Returns:
+Boolean True if initialization was successful. False if not.
+*)
+var
+  res: Boolean;
+begin
+  res := True;
+
+  if CleanOptionPage.SelectedValueIndex = 0 then begin
+    CleanNotificationPage := CreateOutputMsgPage(wpSelectDir, '{#WizTextCleanNotifyCaption}', '', '{#WizTextCleanNotifyMessage}');
+  end;
+
   Result := res;
 end;
 
@@ -613,7 +673,15 @@ var
 begin
 
   res := InitializeOptionsPages(lastOptionsPageId);
- 
+
+  if res then begin
+    res := InitializeCleanOptionPage();
+  end;
+
+  if res then begin
+    res := InitializeCleanNotificationPage();
+  end;
+
 end;
 
 function IsInstallDataPresent() : Boolean;
@@ -631,7 +699,7 @@ begin
   Result := False;
 end;
 
-function PrepareToDownloadInstallData(): Boolean;
+function PrepareToDownloadInstallData(const afterPageId: Integer): Boolean;
 (* Downloads the selected installation data. This function also handles all
 the wizard progress screen updates, so it should not be called arbitrarily.
 Call this function only from an appropriate point to process this data. Also,
@@ -641,7 +709,8 @@ archive), this function is likely to fail spectacularly to reproduce the files
 in a way that will work. So don't do that.
 
 Parameters:
-(none)
+afterPageId: The ID of the wizard page after which the downloading should take
+             place.
 
 Returns:
 Boolean: Returns True if the download was successful. False if it was not.
@@ -677,8 +746,8 @@ begin
       end;
     end;
   end;
-
-  idpDownloadAfter(wpSelectDir);
+  
+  idpDownloadAfter(afterPageId);
 
   Result := res;
 end; 
@@ -697,15 +766,25 @@ Boolean: Returning True will cause the wizard to move to the next page.
 var
   res: Boolean;
   i: Integer;
+  execResult: Integer;
 begin
   case CurPageID of
     wpSelectDir : begin
+      if CleanOptionPage.SelectedValueIndex = 1 then begin
+        if not IsInstallDataPresent() then begin
+          PrepareToDownloadInstallData(wpSelectDir);
+        end;
+      end;
+      res := True; 
+    end;
+    CleanNotificationPage.ID : begin
+      Exec('>', '{#CleanUninstallCommandPOLV}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
+      Exec('>', '{#CleanUninstallCommandFFXI}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
       if not IsInstallDataPresent() then begin
-        PrepareToDownloadInstallData();
+        PrepareToDownloadInstallData(CleanNotificationPage.ID);
       end;
       res := True;
-    end;
-    
+    end;    
     else begin
       for i := 0 to GetArrayLength(Options) - 1 do begin
         if Assigned(Options[i].WizardPage) then begin

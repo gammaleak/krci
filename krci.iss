@@ -24,6 +24,7 @@
 #define ManifestOptionRequired = "Required"
 #define ManifestOptionExclusive = "Exclusive"
 #define ManifestOptionExtension = "Extension"
+#define ManifestOptionAction = "Action"
 
 #define StrNewLine = "#13#10"
 
@@ -100,6 +101,7 @@ type
     Locations: array of MItem;
     WizardPage: TInputOptionWizardPage;
     WizardListIndex: Integer;
+    InstallActions: array of String;
   end;
 
 (* Global variables *)
@@ -351,15 +353,15 @@ begin
   Result := res;
 end;
 
-function ParseManifestLocations(): Boolean;
-(* Parses through the different Locations sections of the manifest file and
-stores the data in the MLocations global variable
+function ParseManifestDetails(): Boolean;
+(* Parses through the different option details sections of the manifest file
+and stores the data in the MLocations global variable
 
 Parameters:
 (none)
 
 Returns:
-Boolean: True if parsing the Locations sections is successful. False if it is
+Boolean: True if parsing the details sections is successful. False if it is
          not.
 
 *)
@@ -370,29 +372,32 @@ var
   locSectionLine: Integer;
   key: String;
   value: String;
-  count: Integer;
+  locationsFound: Integer;
+  actionsFound: Integer;
   i: Integer;
   j: Integer;
   header: String;
 begin
-  Log('ParseManifestLocations(): Beginning function.');
+  Log('ParseManifestDetails(): Beginning function.');
   res := True;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ManifestLocation);
 
   for i := 0 to Manifest.Count - 1 do
-    Log('ParseManifestLocations(): Manifest line ' + IntToStr(i) + ' is ' + Manifest[i]);
+    Log('ParseManifestDetails(): Manifest line ' + IntToStr(i) + ' is ' + Manifest[i]);
 
   for i := 0 to GetArrayLength(Options) - 1 do begin
     header := '[' + Options[i].Option.Key + ']';
-    Log('ParseManifestLocations(): Trying to find ' + header + ' in the manifest file.');
+    Log('ParseManifestDetails(): Trying to find ' + header + ' in the manifest file.');
 
     if FindInTStringList(Manifest, header, locSectionLine) then begin
-      Log('ParseManifestLocations(): Found ' + header + ' in the manifest file.');
+      Log('ParseManifestDetails(): Found ' + header + ' in the manifest file.');
       done := False;
       j := locSectionLine;
-      count := 0;
+      locationsFound := 0;
+      actionsFound := 0;
       SetArrayLength(Options[i].Locations, Manifest.Count);
+      SetArrayLength(Options[i].InstallActions, Manifest.Count);
       while not (done) and (j < Manifest.Count - 1) do begin
         j := j + 1;
         if not SplitManifestKeyValuePair(Manifest[j], key, value) then begin
@@ -402,51 +407,58 @@ begin
             '{#ManifestOptionRequired}' : begin
               if value = '{#ManifestBooleanTrue}' then begin
                 Options[i].Required := True;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = True.');
+                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Required = True.');
               end else begin
                 Options[i].Required := False;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Required = False.');
+                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Required = False.');
               end;
             end;
             '{#ManifestOptionExclusive}' : begin
               if value = '{#ManifestBooleanTrue}' then begin
                 Options[i].Exclusive := True;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = True.');
+                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Exclusive = True.');
               end else begin
                 Options[i].Exclusive := False;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Exclusive = False.');
+                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Exclusive = False.');
               end;
             end;
             '{#ManifestOptionExtension}' : begin
-              Log('ParseManifestLocations(): Intended extension for this URL Location = ' + value + '.');
+              Log('ParseManifestDetails(): Intended extension for this URL Location = ' + value + '.');
               Options[i].Extension := value;
+            end;
+            '{#ManifestOptionAction}' : begin
+              Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].InstallActions[' + IntToStr(actionsFound) + '] = ' + value);
+              Options[i].InstallActions[actionsFound] := value;
+              actionsFound := actionsFound + 1;
             end;
             else begin
               if key = Options[i].Option.Value then begin
-                Options[i].Locations[count].Key := key;
-                Options[i].Locations[count].Value := value;
-                Log('ParseManifestLocations(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(count) + '].Value = ' + value + '.');
-                count := count + 1;
+                Options[i].Locations[locationsFound].Key := key;
+                Options[i].Locations[locationsFound].Value := value;
+                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Value = ' + value + '.');
+                locationsFound := locationsFound + 1;
               end;
             end;
           end;
         end;
       end;
 
-      Log('ParseManifestLocations(): Setting Options[' + IntToStr(i) + '].Locations array length to ' + IntToStr(count) + '.');
-      SetArrayLength(Options[i].Locations, count);
+      Log('ParseManifestDetails(): Setting Options[' + IntToStr(i) + '].Locations array length to ' + IntToStr(locationsFound) + '.');
+      SetArrayLength(Options[i].Locations, locationsFound);
+      Log('ParseManifestDetails(): Settings Options[' + IntToStr(i) + '].InstallActions array length to ' + IntToStr(actionsFound) + '.');
+      SetArrayLength(Options[i].InstallActions, actionsFound);
 
     end else
-      Log('ParseManifestLocations(): Did not find ' + header + ' in the manifest file.');
+      Log('ParseManifestDetails(): Did not find ' + header + ' in the manifest file.');
   end;
 
-  Log('ParseManifestLocations(): Exiting function Result == ' + BoolToStr(res) + '.');
+  Log('ParseManifestDetails(): Exiting function Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
 function ParseManifest(): Boolean;
 (* Parent function for parsing the entire manifest. Delegates most of the
-actual work to ParseManifestOptions() and ParseManifestLocations().
+actual work to ParseManifestOptions() and ParseManifestDetails().
 
 Parameters:
 (none)
@@ -466,7 +478,7 @@ begin
   end;
 
   if res then begin
-    res := ParseManifestLocations()
+    res := ParseManifestDetails()
   end;
 
   Log('ParseManifest(): Exiting function. Result == ' + BoolToStr(res) + '.');

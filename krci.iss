@@ -51,6 +51,8 @@
 #define WizTextActionProgressCaption = "Installing Kujata Reborn Client Software"
 #define WizTextActionProgressDescription = "The installer is now working to install all necessary and chosen components of your client installation."
 
+#define URLDropboxQueryEnding = "?dl=1"
+
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
 AppName={#TheAppName}
@@ -226,6 +228,10 @@ begin
     res := False;
   end else begin
     filename := Copy(url, lastSlashPos + 1, Length(url) - lastSlashPos);
+
+    (* Since it appears that we've find a final slash to the URL, try to excise
+    any extraneous stuff, e.g., the ?dl=1 at the end of Dropbox links. *)
+    StringChangeEx(filename, '{#URLDropboxQueryEnding}', '', True); 
   end;
 
   Result := res;

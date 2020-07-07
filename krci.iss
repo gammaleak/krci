@@ -8,13 +8,13 @@
 #include <idp.iss>
 
 #define TheAppName "Kujata Reborn Client"
-#define TheAppVersion "0.1"
+#define TheAppVersion "0.8"
 #define TheAppPublisher "KujataReborn.com"
 #define TheAppURL "http://kujatareborn.com/wordpress/"
 #define TheAppSupportURL "https://discord.com/invite/uBWtbz"
 #define TheAppUpdateURL "http://kujatareborn.com/wordpress/"
 
-#define ManifestURL "https://drive.google.com/uc?export=download&id=1emgTwMWvGLPLBsT2o9t9yd7p0E7glW48"
+#define ManifestURL "https://www.dropbox.com/s/45vsr8cjjphgfiy/krcimanifest.ini?dl=1"
 #define ManifestLocalFilename "{src}\krcimanifest.ini"
 #define ManifestTempFilename "{tmp}\krcimanifest.ini"
 #define ManifestOptionsHeader "[Options]"
@@ -25,6 +25,7 @@
 #define ManifestOptionExclusive = "Exclusive"
 #define ManifestOptionExtension = "Extension"
 #define ManifestOptionAction = "Action"
+#define ManifestOptionShortcut = "Shortcut"
 
 #define StrNewLine = "#13#10"
 
@@ -62,9 +63,8 @@ AppPublisherURL={#TheAppURL}
 AppSupportURL={#TheAppURL}
 AppUpdatesURL={#TheAppUpdateURL}
 WizardStyle=modern
-DefaultDirName={autopf}\My Program
-DefaultGroupName=My Program
-UninstallDisplayIcon={app}\MyProg.exe
+DefaultDirName={autopf}\ffxikr
+DefaultGroupName=Kujata Reborn
 Compression=lzma2
 SolidCompression=yes
 OutputBaseFilename=krci
@@ -75,24 +75,25 @@ AllowUNCPath=no
 
 SetupLogging=yes
 
+WizardImageFile=krciwizardimage.bmp
+WizardSmallImageFile=krciwizardsmallimage.bmp
+
 
 [Files]
-; Including some files for now that will go away eventually. This is just a
-; placeholder in case I do have some important files to include later.
-Source: "MyProg.exe"; DestDir: "{app}"
-Source: "MyProg.chm"; DestDir: "{app}";
-Source: "krcimanifest.ini"; DestDir: "{app}"
+; There are no files that get packaged in directly.
 Source: "Readme.txt"; DestDir: "{app}"; Flags: isreadme
 
 [Icons]
-Name: "{group}\My Program"; Filename: "{app}\MyProg.exe"
+Name: "{group}\Readme"; Filename: "{app}\Readme.txt"; WorkingDir: "{app}"
 
 [Code]
 (* Type declarations *)
 type
   MItem = record
     (* The MItem type holds a key-value pair found in the installer manifest
-    file. A single key can have multiple values assigned to it.
+    file. MItems are used when the Key is not one of the predetermined,
+    well-known values in either the [Options] section or one of the Option
+    details sections.
 
     Key: The key/name of the option or location listing in the manifest file.
     Value: The value(s) assigned to the key.
@@ -104,11 +105,31 @@ type
 
 type
   MOption = record
-    (* The MLocation type associates a given manifest option with one or more
-    download locations for that option
+    (* The MOption stores the details for a given option defined in the
+    Options section of the manifest. 
 
-    Option: The option for finding installation data at one or more locations
-    Locations: The locations where installation data are found
+    Option:          The key-value pair defining the Option's type and name.
+    Required:        Whether or not the Option type is required for
+                     installation.
+    Exclusive:       Set to True if the user can only choose one of potentially
+                     many alternatives for this Option.
+    Extension:       If the Inno Download Plugin does not capture an
+                     intelligent filename from the URL and one cannot be
+                     deciphered from analyzing the URL, this indicates the
+                     extension that the download is intended to have. This
+                     restricts any downloads for this option with unknown
+                     extensions to a single file extension.
+    Locations:       The URLs at which to download installation data for a
+                     given Option.
+    WizardPage:      The WizardPage (if any) that presents the alternatives for
+                     this Option to the user.
+    WizardListIndex: If there are other alternatives for this Option's type,
+                     the user will be presented with this choice and the other
+                     choices. This stores which index this choice has on the
+                     Wizard Page. We need to keep track of this so that later
+                     we can determine which choice(s) was/were selected.
+    InstallActions:  The list of Actions defined in the manifest file to
+                     install this Option.
     *) 
 
     Option: MItem;
@@ -120,6 +141,7 @@ type
     WizardPage: TInputOptionWizardPage;
     WizardListIndex: Integer;
     InstallActions: array of String;
+    Shortcut: String;
   end;
 
 (* Global variables *)
@@ -135,6 +157,14 @@ var
 
 (* Functions and Procedures *)
 function BoolToStr(const bool: Boolean): String;
+(* Outputs an appropriate string representation of a boolean value.
+
+Parameters:
+bool: The boolean value to represent as a string
+
+Returns:
+String: The string representation of the passed boolean value.
+*)
 begin
   if bool then begin
     Result := 'True';
@@ -232,6 +262,54 @@ begin
     (* Since it appears that we've find a final slash to the URL, try to excise
     any extraneous stuff, e.g., the ?dl=1 at the end of Dropbox links. *)
     StringChangeEx(filename, '{#URLDropboxQueryEnding}', '', True); 
+  end;
+
+  Result := res;
+end;
+
+function CleanOldInstallation(): Boolean;
+(* Cleans out old installations of PlayOnline Viewer, Final Fantasy XI, and any
+files and all subdirectories left behind in the application install directory,
+if any.
+
+Parameters:
+(none)
+
+Returns
+Boolean: True if successful in cleaning everything out. False if unsuccessful.
+*)
+var
+  res: Boolean;
+  execResult: Integer;
+begin;
+  res := True;
+
+  Log('CleanOldInstallation(): Removing PlayOnline Viewer ...');
+  if not Exec('>', '{#CleanUninstallCommandPOLV}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
+    Log('CleanOldInstallation(): Removing PlayOnline Viewer FAILED with error code: ' + IntToStr(execResult) + '.');
+    res := False;
+  end;
+  
+  Log('CleanOldInstallation(): Removing Final Fantasy XI client ...');
+  if not Exec('>', '{#CleanUninstallCommandFFXI}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
+    Log('CleanOldInstallation(): Removing Final Fantasy XI client FAILED with error code: ' + IntToStr(execResult) + '.');
+    res := False;
+  end;
+
+  Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{app}') + ' ...');
+  if DirExists(ExpandConstant('{app}')) then begin
+    if not Exec('cmd.exe', ExpandConstant('/c rmdir /Q  /S "{app}"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
+      res := False;
+      Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{app}') + ' FAILED with error code: ' + IntToStr(execResult) + '.');
+    end; 
+  end;
+
+  Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{group}') + ' ...');
+  if DirExists(ExpandConstant('{group}')) then begin
+    if not Exec('cmd.exe', ExpandConstant('/c rmdir /Q  /S "{group}"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
+      res := False;
+      Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{group}') + ' FAILED with error code: ' + IntToStr(execResult) + '.');
+    end; 
   end;
 
   Result := res;
@@ -422,6 +500,14 @@ begin
       j := locSectionLine;
       locationsFound := 0;
       actionsFound := 0;
+
+      (* Set some default values *)
+      Options[i].Required := False;
+      Options[i].Exclusive := False;
+      Options[i].Selected := False;
+      Options[i].Extension := '';
+      Options[i].Shortcut := '';
+
       SetArrayLength(Options[i].Locations, Manifest.Count);
       SetArrayLength(Options[i].InstallActions, Manifest.Count);
       while not (done) and (j < Manifest.Count - 1) do begin
@@ -452,13 +538,26 @@ begin
               Log('ParseManifestDetails(): Intended extension for this URL Location = ' + value + '.');
               Options[i].Extension := value;
             end;
-            '{#ManifestOptionAction}' : begin
-              Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].InstallActions[' + IntToStr(actionsFound) + '] = ' + value);
-              Options[i].InstallActions[actionsFound] := value;
-              actionsFound := actionsFound + 1;
-            end;
             else begin
+              if Pos(Options[i].Option.Value, key) > 0 then begin
+                if Pos('{#ManifestOptionAction}', key) > 0 then begin
+                  (* This is an Action for this particular option *)
+                  Options[i].InstallActions[actionsFound] := value;
+                  Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].InstallActions[' + IntToStr(actionsFound) + '] = ' + value + '.');
+                  actionsFound := actionsFound + 1;
+                end;
+              end;
+              if Pos(Options[i].Option.Value, key) > 0 then begin
+                if Pos('{#ManifestOptionShortcut}', key) > 0 then begin
+                  (* This is a Shortcut for this particular option. Only one
+                  shortcut is kept, so only one should be defined in the
+                  manifest file. *)
+                  Options[i].Shortcut := value;
+                  Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Shortcut = ' + value + '.');
+                end;
+              end; 
               if key = Options[i].Option.Value then begin
+                (* This is a location for the given option *)
                 Options[i].Locations[locationsFound].Key := key;
                 Options[i].Locations[locationsFound].Value := value;
                 Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Value = ' + value + '.');
@@ -534,11 +633,14 @@ begin
     res := ParseManifest();
   end;
 
+  if StrToFloat(ManVerControl.Value) > StrToFloat('{#TheAppVersion}') then begin
+    res := False;
+  end;
+
   if not res then begin
     Log('InitializeSetup(): res == FALSE, setup will not continue.');
   end;
 
-  Log('InitializeSetup(): Exiting function. Result == ' + BoolToStr(res) + '.');
   Result := res;
 end;
 
@@ -698,7 +800,7 @@ begin
 
 end;
 
-function IsInstallDataPresent() : Boolean;
+function IsInstallDataPresent(filename: String) : Boolean;
 (* Looks for the install data defined in the manifest file to see if it's
 already downloaded or if it's in the working directory.
 
@@ -708,9 +810,16 @@ Parameters:
 Returns:
 Boolean: True if the data is already present. False if not
 *)
+var
+  res: Boolean;
 begin
-  (* TODO: Actually code out this function so that it does as described. *)
-  Result := False;
+  res := False;
+
+  if FileExists(ExpandConstant('{src}\' + filename)) then begin
+    res := True;
+  end;
+
+  Result := res;
 end;
 
 function PrepareToDownloadInstallData(const afterPageId: Integer): Boolean;
@@ -733,6 +842,7 @@ var
   res: Boolean;
   filename: String;
   fileExtension: String;
+  execResult: Integer;
   i: Integer;
   j: Integer;
 begin
@@ -755,7 +865,15 @@ begin
             Log('PrepareToDownloadInstallDate(): Modifying filename to ' + filename + '.');
           end;
 
-          idpAddFile(Options[i].Locations[j].Value, ExpandConstant('{tmp}\' + filename));
+          if IsInstallDataPresent(filename) then begin
+            Log(ExpandConstant('PrepareToDownloadInstallData(): Found ' + filename + ' at {src}\' + filename + ' and attempting to copy to {tmp}\' + filename + '.'));
+            if not Exec('>', ExpandConstant('cmd.exe /c copy /V /Y "{src}\' + filename + '" "{tmp}\' + filename + '"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
+              Log(ExpandConstant('PrepareToDownloadInstallData(): Copy failed. Adding ' + filename + ' to download list.'));
+              idpAddFile(Options[i].Locations[j].Value, ExpandConstant('{tmp}\' + filename));
+            end;
+          end else begin
+            idpAddFile(Options[i].Locations[j].Value, ExpandConstant('{tmp}\' + filename));
+          end;
         end;
       end;
     end;
@@ -810,6 +928,45 @@ begin
   Result := res;
 end;
 
+function ProcessShortcuts(): Boolean;
+(* Creates the shortcuts defined in the manifest file.
+
+Parameters:
+(none)
+
+Returns:
+Boolean: True if the shortcuts were processed correctly. False if they were
+         not.
+*)
+var
+  res: Boolean;
+  runIn: String;
+  i: Integer;
+begin
+  res := True;
+
+  for i := 0 to GetArrayLength(Options) - 1 do begin
+    if Options[i].Selected then begin
+      if Length(Options[i].Shortcut) > 0 then begin
+        (* For some reason, calling ExtractFileDir() and ExpandConstant() as we
+        do below causes a single quotation mark to be placed at the beginning
+        of the resulting string, but not at the end. If the string has no
+        spaces AddQuote() won't add any quotation marks. Therefore, we call
+        RemoveQuotes() first to remove all quotes, and then AddQuotes() to add
+        them in case there actually are spaces. It's ridiculous, but Inno's
+        code adds the single quote to begin with, so it's their fault *)
+        runIn := ExtractFileDir(ExpandConstant(Options[i].Shortcut));
+        runIn := RemoveQuotes(runIn);
+        runIn := AddQuotes(runIn); 
+
+        CreateShellLink(ExpandConstant('{group}\' + Options[i].Option.Value + '.lnk'), 'Shortcut to open ' + Options[i].Option.Value, ExpandConstant(Options[i].Shortcut), '', runIn, ExpandConstant(Options[i].Shortcut), 0, SW_SHOWNORMAL);
+      end;
+    end;
+  end;
+
+  Result := res;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 (* Handles what to do based on which page the user just clicked "next" on.
 
@@ -824,7 +981,6 @@ Boolean: Returning True will cause the wizard to move to the next page.
 var
   res: Boolean;
   idpPageId: Integer;
-  execResult: Integer;
   i: Integer;
 begin
   idpPageId := -1
@@ -832,20 +988,15 @@ begin
   case CurPageID of
     wpSelectDir : begin
       if CleanOptionPage.SelectedValueIndex = 1 then begin
-        if not IsInstallDataPresent() then begin
-          PrepareToDownloadInstallData(wpSelectDir);
-          idpPageId := IDPForm.Page.ID;
-        end;
+        PrepareToDownloadInstallData(wpSelectDir);
+        idpPageId := IDPForm.Page.ID;
       end;
       res := True; 
     end;
     CleanNotificationPage.ID : begin
-      Exec('>', '{#CleanUninstallCommandPOLV}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
-      Exec('>', '{#CleanUninstallCommandFFXI}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
-      if not IsInstallDataPresent() then begin
-        PrepareToDownloadInstallData(CleanNotificationPage.ID);
-        idpPageId := IDPForm.Page.ID;
-      end;
+      CleanOldInstallation();
+      PrepareToDownloadInstallData(CleanNotificationPage.ID);
+      idpPageId := IDPForm.Page.ID;
       res := True;
     end;    
     else begin
@@ -882,6 +1033,31 @@ begin
   case CurStep of
     ssInstall : begin
       ProcessActions();
+    end;
+    ssPostInstall : begin
+      ProcessShortcuts();
+    end;
+    else begin
+    end;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+(* An event function of Inno Setup, this is called when the uninstallation step
+has changed. For our purposes, used to discover when the uninstall step has
+been reached. Then we do a clean-out of the old install.
+
+Parameters
+CurUninstallStep: A TUninstallStep which will be the uninstallation step to
+                  which the system has just changed.
+
+Returns:
+(n/a)
+*)
+begin
+  case CurUninstallStep of
+    usUninstall : begin
+      CleanOldInstallation();
     end;
     else begin
     end;

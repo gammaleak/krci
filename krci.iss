@@ -1,4 +1,4 @@
-; -- krci.iss --
+  ; -- krci.iss --
 ; Installs all client software needed to play FFXI on the Kujata Reborn server
 ; Within the [Code] section, type and function comments are done in python
 ; docstring style.
@@ -34,6 +34,8 @@
 #define WizTextIntroMsgDownload = "You are about to install all the necessary files to play on the Final Fantasy XI private server, Kujata Reborn (kujatareborn.com). This installer will download the required installation files from the internet and install them on your machine. Please remain connected to the internet throughout the installation process (a wired connection would be advisable)."
 #define WizTextIntroMsgRequired = "The following items are required to play on Kujata Reborn and will be downloaded and installed:"
 #define WizTextIntroMsgOptions = "The next screen(s) will allow you to choose some elements of your installation."
+#define WizTextIntroMsgFyi = "FYI:"
+#define WizTextIntroMsgSize = "The minimum download size is over 7GB. Depending on which additional options you choose it can be significantly more."
 #define WizTextIntroMsgHelp = "If you need assistance with this installer, please join our Discord (https://discord.com/invite/uBWtbz) and go ask for help in the ?helpdesk room."
 
 #define WizTextCleanOptionCaption = "Remove Previous FFXI Installation"
@@ -41,6 +43,12 @@
 #define WizTextCleanOptionSubcaption = "Do you want the Kujata Reborn Client Installer to uninstall any previous Final Fantasy XI and PlayOnline Viewer installations?"                                                                                                                                                                                 
 #define WizTextCleanOptionYes = "Yes"
 #define WizTextCleanOptionNo = "No"
+
+#define WizTextShortcutsOptionCaption = "Kujata Reborn Shortcuts"
+#define WizTextShortcutsOptionDescription = "Choose whether you want shortcuts and where you would like them to be placed."
+#define WizTextShortcutsOptionSubcaption = "Do you want shortcuts in the Start Menu, Desktop, both, or neither?"
+#define WizTextShortcutsOptionStartMenu = "Start Menu"
+#define WizTextShortcutsOptionDesktop = "Desktop"
 
 #define WizTextCleanNotifyCaption = "Removal of Previous Installation"
 #define WizTextCleanNotifyDescription = ""
@@ -77,14 +85,17 @@ SetupLogging=yes
 
 WizardImageFile=krciwizardimage.bmp
 WizardSmallImageFile=krciwizardsmallimage.bmp
+UninstallDisplayIcon=krciwizardsmallimage.bmp
 
+RestartIfNeededByRun=yes
 
 [Files]
 ; There are no files that get packaged in directly.
 Source: "Readme.txt"; DestDir: "{app}"; Flags: isreadme
+Source: "VC_redist.x86.exe"; DestDir: "{app}"; Flags: deleteafterinstall
 
-[Icons]
-Name: "{group}\Readme"; Filename: "{app}\Readme.txt"; WorkingDir: "{app}"
+[Run]
+Filename: "{app}\VC_redist.x86.exe"; Parameters: "/passive /norestart"
 
 [Code]
 (* Type declarations *)
@@ -153,6 +164,7 @@ var
   CleanOptionPage: TInputOptionWizardPage; (* Option to uninstall prev FFXI *)
   CleanNotificationPage: TOutputMsgWizardPage; (* Notifies user of removal *)
   ActionProgressPage: TOutputProgressWizardPage; (* Progress thru actions *)
+  ShortcutsOptionPage: TInputOptionWizardPage; (* Option for shortcut loc *)
 
 
 (* Functions and Procedures *)
@@ -267,6 +279,78 @@ begin
   Result := res;
 end;
 
+function RemoveCharFromString(const c: WideChar; var str: String): Boolean;
+(* Finds and removes every occurrence of a given character in the provided
+string.
+
+Parameters:
+
+Returns:
+Boolean: True if at least one occurence of the character was found. False if no
+         occurrences were found.
+*)
+var
+  res: Boolean;
+  newStr: String;
+  i: Integer;
+begin
+  res := False;
+  newStr := '';
+
+  for i := 1 to Length(str) do begin
+    if str[i] <> c then begin
+      newStr := newStr + str[i];
+    end else begin
+      res := True;
+    end;
+  end;
+
+  str := newStr;
+
+  Result := res;
+end;
+
+function CapFilenameWithQuotesAsNeeded(var filename: String): Boolean;
+(* Inno Setup provides an AddQuotes() function that is supposed to add quotes
+to a filename only if it has spaces. This function has not proved to be
+working reliably. Therefore, this function removes all quotes from a given
+filename and then looks for a space in the filename to see if it needs quotes
+after all. If it finds a space, it caps each side of the filename with quotes.
+Note that this function doesn't really do any error-checking if you pass it
+something that is not a well-formed, fully-qualified filename.
+
+Parameters:
+filename: The fully-qualified filename that may need quotes.
+
+Result:
+Boolean: True if quotes were added. False if they were not.
+*)
+var
+  res: Boolean;
+  i: Integer;
+begin
+  res := False;
+  i := 1;
+
+  (* First, remove all quotes just in case we're passed a filename that doesn't
+  need them to begin with. *)
+  RemoveCharFromString('"', filename);
+
+  while (not res) and (i <= Length(filename)) do begin  
+    if filename[i] = ' ' then begin
+      res := True;
+    end else begin
+      i := i + 1;
+    end;
+  end;
+
+  if res then begin
+    filename := '"' + filename + '"';
+  end;
+
+  Result := res;
+end;
+
 function CleanOldInstallation(): Boolean;
 (* Cleans out old installations of PlayOnline Viewer, Final Fantasy XI, and any
 files and all subdirectories left behind in the application install directory,
@@ -304,11 +388,11 @@ begin;
     end; 
   end;
 
-  Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{group}') + ' ...');
-  if DirExists(ExpandConstant('{group}')) then begin
-    if not Exec('cmd.exe', ExpandConstant('/c rmdir /Q  /S "{group}"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
+  Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{commonprograms}\Kujata Reborn') + ' ...');
+  if DirExists(ExpandConstant('"{commonprograms}\Kujata Reborn"')) then begin
+    if not Exec('cmd.exe', ExpandConstant('/c rmdir /Q  /S "{commonprograms}\Kujata Reborn"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
       res := False;
-      Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{group}') + ' FAILED with error code: ' + IntToStr(execResult) + '.');
+      Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{commonprograms}\Kujata Reborn') + ' FAILED with error code: ' + IntToStr(execResult) + '.');
     end; 
   end;
 
@@ -624,10 +708,16 @@ Boolean: True if initialization was succesful. False if not. If False is
 *)
 var
   res: Boolean;
+  execResult: Integer;
 begin
   Log('InitializeSetup(): Beginning function.');
 
   res := RetrieveManifest();
+
+  (*
+  Exec('>', 'cmd.exe /c mkdir "' + ExpandConstant('{commonprograms}\Kujata Reborn') + '"', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
+  CreateShellLink(ExpandConstant('{commonprograms}\Kujata Reborn\fuckyouheresmylink.lnk'), 'Shortcut to open bullshit', 'C:\Windows\System32\notepad.exe', '', ExpandConstant('{sys}'), '', 0, SW_SHOWNORMAL);
+  *)
 
   if res then begin
     res := ParseManifest();
@@ -688,7 +778,9 @@ begin
           Options[i].WizardPage := CreateInputOptionPage(prevPage, Options[i].Option.Key, 'Choose a ' + Options[i].Option.Key + ' to download and install.', '', Options[i].Exclusive, False);
           prevPage := Options[i].WizardPage.ID;
           Options[i].WizardListIndex := Options[i].WizardPage.Add(Options[i].Option.Value);
-          Options[i].WizardPage.Values[Options[i].WizardListIndex] := True;
+          if Options[i].Required then begin
+            Options[i].WizardPage.Values[Options[i].WizardListIndex] := True;
+          end;
         end;
         if Options[i].WizardListIndex < 0 then begin
           Options[i].WizardListIndex := Options[i].WizardPage.Add(Options[i].Option.Value);
@@ -716,7 +808,7 @@ begin
     end;
   end;
 
-  introMsg := introMsg + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgOptions}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgHelp}'
+  introMsg := introMsg + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgOptions}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgFyi}' + {#StrNewLine} + '{#WizTextIntroMsgSize}' + {#StrNewLine} + {#StrNewLine} + '{#WizTextIntroMsgHelp}'
 
   IntroPage := CreateOutputMsgPage(wpWelcome, '{#WizTextIntroCaption}', '', introMsg);
 
@@ -770,6 +862,28 @@ begin
   Result := res;
 end;
 
+function InitializeShortcutsOptionPage(): Boolean;
+(* Gives the user the option to install shortcuts to Start Menu, Desktop, or
+both
+
+Parameters:
+(none)
+
+Returns:
+Boolean True if initialization was successful. False if not.
+*)
+var
+  res: Boolean;
+begin
+  res := True; 
+
+  ShortcutsOptionPage := CreateInputOptionPage(wpSelectDir, '{#WizTextShortcutsOptionCaption}', '{#WizTextShortcutsOptionDescription}', '{#WizTextShortcutsOptionSubcaption}', False, False);
+  ShortcutsOptionPage.Add('{#WizTextShortcutsOptionStartMenu}');
+  ShortcutsOptionPage.Add('{#WizTextShortcutsOptionDesktop}');
+
+  Result := res;
+end;
+
 procedure InitializeWizard;
 (* Initializes the custom GUI pages for the installer.
 
@@ -788,6 +902,10 @@ begin
 
   if res then begin
     res := InitializeCleanOptionPage();
+  end;
+
+  if res then begin
+    res := InitializeShortcutsOptionPage();
   end;
 
   if res then begin
@@ -940,6 +1058,10 @@ Boolean: True if the shortcuts were processed correctly. False if they were
 *)
 var
   res: Boolean;
+  execResult: Integer;
+  startMenuDir: String;
+  linkStartMenu: String;
+  linkDesktop: String;
   runIn: String;
   i: Integer;
 begin
@@ -948,18 +1070,25 @@ begin
   for i := 0 to GetArrayLength(Options) - 1 do begin
     if Options[i].Selected then begin
       if Length(Options[i].Shortcut) > 0 then begin
-        (* For some reason, calling ExtractFileDir() and ExpandConstant() as we
-        do below causes a single quotation mark to be placed at the beginning
-        of the resulting string, but not at the end. If the string has no
-        spaces AddQuote() won't add any quotation marks. Therefore, we call
-        RemoveQuotes() first to remove all quotes, and then AddQuotes() to add
-        them in case there actually are spaces. It's ridiculous, but Inno's
-        code adds the single quote to begin with, so it's their fault *)
+        (* Remove any quotes from the directory that the shortcut will run in
+        because CreateShellLink will add them if they're needed. But it doesn't
+        check to see if they're already there. *)
         runIn := ExtractFileDir(ExpandConstant(Options[i].Shortcut));
-        runIn := RemoveQuotes(runIn);
-        runIn := AddQuotes(runIn); 
-
-        CreateShellLink(ExpandConstant('{group}\' + Options[i].Option.Value + '.lnk'), 'Shortcut to open ' + Options[i].Option.Value, ExpandConstant(Options[i].Shortcut), '', runIn, ExpandConstant(Options[i].Shortcut), 0, SW_SHOWNORMAL);
+        RemoveCharFromString('"', runIn);
+        startMenuDir := ExpandConstant('{userprograms}\Kujata Reborn'); 
+        linkStartMenu := ExpandConstant('{userprograms}\Kujata Reborn\' + Options[i].Option.Value + '.lnk');
+        linkDesktop := ExpandConstant('{userdesktop}\' + Options[i].Option.Value + '.lnk');
+        if ShortcutsOptionPage.Values[0] then begin
+          (* Start Menu shortcuts *)
+          if not DirExists(startMenuDir) then begin
+            Exec('>', 'cmd.exe /c mkdir "' + startMenuDir + '"', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
+          end;  
+          CreateShellLink(linkStartMenu, 'Shortcut to open ' + Options[i].Option.Value, ExpandConstant(Options[i].Shortcut), '', runIn, ExpandConstant(Options[i].Shortcut), 0, SW_SHOWNORMAL);
+        end;
+        if ShortcutsOptionPage.Values[1] then begin
+          (* Desktop shortcuts *)
+          CreateShellLink(linkDesktop, 'Shortcut to open ' + Options[i].Option.Value, ExpandConstant(Options[i].Shortcut), '', runIn, ExpandConstant(Options[i].Shortcut), 0, SW_SHOWNORMAL);
+        end;
       end;
     end;
   end;

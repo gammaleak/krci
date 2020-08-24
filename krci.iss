@@ -14,7 +14,7 @@
 #define TheAppSupportURL "https://discord.com/invite/uBWtbz"
 #define TheAppUpdateURL "http://kujatareborn.com/wordpress/"
 
-#define ManifestURL "https://www.dropbox.com/s/45vsr8cjjphgfiy/krcimanifest.ini?dl=1"
+#define ManifestURL "https://sleeplessknightz.net/index.php/s/GAK3e6v624iNcNW/download"
 #define ManifestLocalFilename "{src}\krcimanifest.ini"
 #define ManifestTempFilename "{tmp}\krcimanifest.ini"
 #define ManifestOptionsHeader "[Options]"
@@ -61,6 +61,7 @@
 #define WizTextActionProgressDescription = "The installer is now working to install all necessary and chosen components of your client installation."
 
 #define URLDropboxQueryEnding = "?dl=1"
+#define URLOwncloudFilePrefix = "download?n="
 
 [Setup]
 AppId = {{2B9AF53B-8A41-4135-B0E8-6B39235624A2}
@@ -165,6 +166,7 @@ var
   CleanNotificationPage: TOutputMsgWizardPage; (* Notifies user of removal *)
   ActionProgressPage: TOutputProgressWizardPage; (* Progress thru actions *)
   ShortcutsOptionPage: TInputOptionWizardPage; (* Option for shortcut loc *)
+  LoggingLevel: Integer;
 
 
 (* Functions and Procedures *)
@@ -182,6 +184,33 @@ begin
     Result := 'True';
   end else
     Result := 'False';
+end;
+
+function LLog(const str: String; const level: Integer): Boolean;
+(* Finds a string within a TStringList. The string must be an exact match. The
+LLog sends strings to the log file if they satisfy a given logging level
+requirement.
+
+Parameters:
+str: The string that will potentially be written to the log file.
+level: The level of logging that is necessary to actually write the string to
+       the log. Valid values are 0 = critical errors; 1 = debug messages;
+       2 = all information
+
+Returns
+Boolean: True if successful in writing to the log and false if not.
+*)
+var
+  written: Boolean;
+begin
+  written := False;
+
+  if (level <= LoggingLevel) then begin
+    Log(str);
+    written := True;
+  end;
+
+  Result := written;
 end;
 
 function FindInTStringList(const tstrl: TStringList; const str: String; var line: Integer): Boolean;
@@ -205,7 +234,7 @@ begin
   foundStr := False;
   k := 0;
   while (not foundStr) and (k < tstrl.Count) do begin
-    Log('FindInTStringList(): Checking TStringList line ' + IntToStr(k) + ', ' + tstrl[k] + ' against ' + str + '.');
+    LLog('FindInTStringList(): Checking TStringList line ' + IntToStr(k) + ', ' + tstrl[k] + ' against ' + str + '.', 2);
     if tstrl[k] = str then begin
       line := k;
       foundStr := True
@@ -243,7 +272,9 @@ end;
 
 function ShortFilenameFromURL(const url: String; var filename: String): Boolean;
 (* Finds the short filename (i.e., without the fully qualified directory) from
-a given URL
+a given URL. For OwnCloud links that end with "/download" you can add an unused
+URL variable ?n=<actual_filename> in order to have the filename extracted from
+the URL. This is a bit of a hack, but it gets the job done.
 
 Parameters
 url: The URL from which to get the filename.
@@ -271,9 +302,18 @@ begin
   end else begin
     filename := Copy(url, lastSlashPos + 1, Length(url) - lastSlashPos);
 
-    (* Since it appears that we've find a final slash to the URL, try to excise
-    any extraneous stuff, e.g., the ?dl=1 at the end of Dropbox links. *)
-    StringChangeEx(filename, '{#URLDropboxQueryEnding}', '', True); 
+    (* Since it appears that we've find a final slash to the URL, perform some
+    general-purpose cleanup that may be or may not be necessary to truly isolate
+    the filename *)
+    
+    (* If present, remove the ?dl=1 at the end of Dropbox links. *)
+    StringChangeEx(filename, '{#URLDropboxQueryEnding}', '', True);
+    
+    (* As explained in the function description, Owncloud links can be "hacked"
+    to include the file name in a URL variable that Owncloud ignores but our
+    code here can use to identify the filename. If the filename begins with
+    "download?n=" we strip that out here and leave whatever is left *)
+    StringChangeEx(filename, '{#URLOwncloudFilePrefix}', '', True);
   end;
 
   Result := res;
@@ -368,31 +408,31 @@ var
 begin;
   res := True;
 
-  Log('CleanOldInstallation(): Removing PlayOnline Viewer ...');
+  LLog('CleanOldInstallation(): Removing PlayOnline Viewer ...', 1);
   if not Exec('>', '{#CleanUninstallCommandPOLV}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
-    Log('CleanOldInstallation(): Removing PlayOnline Viewer FAILED with error code: ' + IntToStr(execResult) + '.');
+    LLog('CleanOldInstallation(): Removing PlayOnline Viewer FAILED with error code: ' + IntToStr(execResult) + '.', 0);
     res := False;
   end;
   
-  Log('CleanOldInstallation(): Removing Final Fantasy XI client ...');
+  LLog('CleanOldInstallation(): Removing Final Fantasy XI client ...', 1);
   if not Exec('>', '{#CleanUninstallCommandFFXI}', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
-    Log('CleanOldInstallation(): Removing Final Fantasy XI client FAILED with error code: ' + IntToStr(execResult) + '.');
+    LLog('CleanOldInstallation(): Removing Final Fantasy XI client FAILED with error code: ' + IntToStr(execResult) + '.', 0);
     res := False;
   end;
 
-  Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{app}') + ' ...');
+  LLog('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{app}') + ' ...', 1);
   if DirExists(ExpandConstant('{app}')) then begin
     if not Exec('cmd.exe', ExpandConstant('/c rmdir /Q  /S "{app}"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
       res := False;
-      Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{app}') + ' FAILED with error code: ' + IntToStr(execResult) + '.');
+      LLog('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{app}') + ' FAILED with error code: ' + IntToStr(execResult) + '.', 0);
     end; 
   end;
 
-  Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{commonprograms}\Kujata Reborn') + ' ...');
+  LLog('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{commonprograms}\Kujata Reborn') + ' ...', 1);
   if DirExists(ExpandConstant('"{commonprograms}\Kujata Reborn"')) then begin
     if not Exec('cmd.exe', ExpandConstant('/c rmdir /Q  /S "{commonprograms}\Kujata Reborn"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
       res := False;
-      Log('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{commonprograms}\Kujata Reborn') + ' FAILED with error code: ' + IntToStr(execResult) + '.');
+      LLog('CleanOldInstallation(): Removing anything left in ' + ExpandConstant('{commonprograms}\Kujata Reborn') + ' FAILED with error code: ' + IntToStr(execResult) + '.', 0);
     end; 
   end;
 
@@ -415,29 +455,29 @@ var
   res: Boolean;
   local: Boolean;
 begin
-  Log('RetrieveManifest(): Beginning function.');
+  LLog('RetrieveManifest(): Beginning function.', 2);
   res := True;
   local := False;
   
   if FileExists(ExpandConstant('{#ManifestLocalFilename}')) then begin
-    Log('RetrieveManifest(): Local manifest found.');
+    LLog('RetrieveManifest(): Local manifest found.', 1);
     local := True;
     ManifestLocation := ExpandConstant('{#ManifestLocalFilename}');
   end else
-    Log('RetrieveManifest(): No local manifest found.');
+    LLog('RetrieveManifest(): No local manifest found.', 1);
 
   if not local then begin
-    Log('RetrieveManifest(): Attempting to download remote manifest file.');
+    LLog('RetrieveManifest(): Attempting to download remote manifest file.', 1);
     res := idpDownloadFile('{#ManifestURL}', ExpandConstant('{#ManifestTempFilename}'));
         
     if res then begin
-      Log('RetrieveManifest(): Remote manifest downloaded successfully.');
+      LLog('RetrieveManifest(): Remote manifest downloaded successfully.', 1);
       ManifestLocation := ExpandConstant('{#ManifestTempFilename}');
     end else
-      Log('RetrieveManifest(): Failed to download the manifest file.');
+      LLog('RetrieveManifest(): Failed to download the manifest file.', 0);
   end;
 
-  Log('RetrieveManifest(): Exiting function. Result == ' + BoolToStr(res) + '.');
+  LLog('RetrieveManifest(): Exiting function. Result == ' + BoolToStr(res) + '.', 2);
   Result := res 
 end;
 
@@ -459,18 +499,18 @@ var
   res: Boolean;
   p: Integer;
 begin
-  Log('SplitManifestKeyValuePair(): Beginning function.');
+  LLog('SplitManifestKeyValuePair(): Beginning function.', 2);
   res := True;
 
-  Log('SplitManifestKeyValuePair(): Locating the manifest key-value separator: {#ManifestKeyValueSeparator}.');
+  LLog('SplitManifestKeyValuePair(): Locating the manifest key-value separator: {#ManifestKeyValueSeparator}.', 1);
   p := Pos('{#ManifestKeyValueSeparator}', Line);
   if p <= 0 then begin
-    Log('SplitManifestKeyValuePair(): Could not locate the manifest key-value separator: {#ManifestKeyValueSeparator}.');
+    LLog('SplitManifestKeyValuePair(): Could not locate the manifest key-value separator: {#ManifestKeyValueSeparator}.', 0);
     res := False;
   end;
 
   if res then begin
-    Log('SplitManifestKeyValuePair(): Splitting key-value pair of line: ' + Line);
+    LLog('SplitManifestKeyValuePair(): Splitting key-value pair of line: ' + Line, 2);
     Key := Line;
     Delete(Key, p, Length(Key)-(p-1));
     Key := Trim(Key);
@@ -480,7 +520,7 @@ begin
     Value := Trim(Value);
   end;
 
-  Log('SplitManifestKeyValuePair(): Exiting function. Result == ' + BoolToStr(res) + '.');
+  LLog('SplitManifestKeyValuePair(): Exiting function. Result == ' + BoolToStr(res) + '.', 2);
   Result := res;
 end;
 
@@ -502,7 +542,7 @@ var
   count: Integer;
   done: Boolean;
 begin
-  Log('ParseManifestOptions(): Beginning function.');
+  LLog('ParseManifestOptions(): Beginning function.', 2);
   res := True;
   done := False;
   count := 0;
@@ -513,7 +553,7 @@ begin
   res := FindInTStringList(Manifest, '{#ManifestOptionsHeader}', i);
 
   if res then begin
-    Log('ParseManifestOptions(): [Options] header found.');
+    LLog('ParseManifestOptions(): [Options] header found.', 1);
     
     SetArrayLength(Options, Manifest.Count);
     
@@ -528,7 +568,7 @@ begin
         end else begin
           Options[count].Option.Key := key;
           Options[count].Option.Value := value;
-          Log('ParseManifestOptions(): Storing option ' + Options[count].Option.Key + ' with value ' + Options[count].Option.Value + ' in Options[' + IntToStr(count) + '].Option');
+          LLog('ParseManifestOptions(): Storing option ' + Options[count].Option.Key + ' with value ' + Options[count].Option.Value + ' in Options[' + IntToStr(count) + '].Option', 1);
           count := count + 1;
          end;
       end;
@@ -537,7 +577,7 @@ begin
   
   SetArrayLength(Options, count);
 
-  Log('ParseManifestOptions(): Exiting function. Result == ' + BoolToStr(res) + '.');
+  LLog('ParseManifestOptions(): Exiting function. Result == ' + BoolToStr(res) + '.', 2);
   Result := res;
 end;
 
@@ -566,20 +606,20 @@ var
   j: Integer;
   header: String;
 begin
-  Log('ParseManifestDetails(): Beginning function.');
+  LLog('ParseManifestDetails(): Beginning function.', 2);
   res := True;
   Manifest := TStringList.Create;
   Manifest.LoadFromFile(ManifestLocation);
 
   for i := 0 to Manifest.Count - 1 do
-    Log('ParseManifestDetails(): Manifest line ' + IntToStr(i) + ' is ' + Manifest[i]);
+    LLog('ParseManifestDetails(): Manifest line ' + IntToStr(i) + ' is ' + Manifest[i], 2);
 
   for i := 0 to GetArrayLength(Options) - 1 do begin
     header := '[' + Options[i].Option.Key + ']';
-    Log('ParseManifestDetails(): Trying to find ' + header + ' in the manifest file.');
+    LLog('ParseManifestDetails(): Trying to find ' + header + ' in the manifest file.', 1);
 
     if FindInTStringList(Manifest, header, locSectionLine) then begin
-      Log('ParseManifestDetails(): Found ' + header + ' in the manifest file.');
+      LLog('ParseManifestDetails(): Found ' + header + ' in the manifest file.', 1);
       done := False;
       j := locSectionLine;
       locationsFound := 0;
@@ -603,23 +643,23 @@ begin
             '{#ManifestOptionRequired}' : begin
               if value = '{#ManifestBooleanTrue}' then begin
                 Options[i].Required := True;
-                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Required = True.');
+                LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Required = True.', 1);
               end else begin
                 Options[i].Required := False;
-                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Required = False.');
+                LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Required = False.', 1);
               end;
             end;
             '{#ManifestOptionExclusive}' : begin
               if value = '{#ManifestBooleanTrue}' then begin
                 Options[i].Exclusive := True;
-                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Exclusive = True.');
+                LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Exclusive = True.', 1);
               end else begin
                 Options[i].Exclusive := False;
-                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Exclusive = False.');
+                LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Exclusive = False.', 1);
               end;
             end;
             '{#ManifestOptionExtension}' : begin
-              Log('ParseManifestDetails(): Intended extension for this URL Location = ' + value + '.');
+              LLog('ParseManifestDetails(): Intended extension for this URL Location = ' + value + '.', 1);
               Options[i].Extension := value;
             end;
             else begin
@@ -627,7 +667,7 @@ begin
                 if Pos('{#ManifestOptionAction}', key) > 0 then begin
                   (* This is an Action for this particular option *)
                   Options[i].InstallActions[actionsFound] := value;
-                  Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].InstallActions[' + IntToStr(actionsFound) + '] = ' + value + '.');
+                  LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].InstallActions[' + IntToStr(actionsFound) + '] = ' + value + '.', 1);
                   actionsFound := actionsFound + 1;
                 end;
               end;
@@ -637,14 +677,14 @@ begin
                   shortcut is kept, so only one should be defined in the
                   manifest file. *)
                   Options[i].Shortcut := value;
-                  Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Shortcut = ' + value + '.');
+                  LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Shortcut = ' + value + '.', 1);
                 end;
               end; 
               if key = Options[i].Option.Value then begin
                 (* This is a location for the given option *)
                 Options[i].Locations[locationsFound].Key := key;
                 Options[i].Locations[locationsFound].Value := value;
-                Log('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Value = ' + value + '.');
+                LLog('ParseManifestDetails(): Storing Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Key = ' + key + ' | Options[' + IntToStr(i) + '].Locations[' + IntToStr(locationsFound) + '].Value = ' + value + '.', 1);
                 locationsFound := locationsFound + 1;
               end;
             end;
@@ -652,16 +692,16 @@ begin
         end;
       end;
 
-      Log('ParseManifestDetails(): Setting Options[' + IntToStr(i) + '].Locations array length to ' + IntToStr(locationsFound) + '.');
+      LLog('ParseManifestDetails(): Setting Options[' + IntToStr(i) + '].Locations array length to ' + IntToStr(locationsFound) + '.', 2);
       SetArrayLength(Options[i].Locations, locationsFound);
-      Log('ParseManifestDetails(): Settings Options[' + IntToStr(i) + '].InstallActions array length to ' + IntToStr(actionsFound) + '.');
+      LLog('ParseManifestDetails(): Settings Options[' + IntToStr(i) + '].InstallActions array length to ' + IntToStr(actionsFound) + '.', 2);
       SetArrayLength(Options[i].InstallActions, actionsFound);
 
     end else
-      Log('ParseManifestDetails(): Did not find ' + header + ' in the manifest file.');
+      LLog('ParseManifestDetails(): Did not find ' + header + ' in the manifest file.', 0);
   end;
 
-  Log('ParseManifestDetails(): Exiting function Result == ' + BoolToStr(res) + '.');
+  LLog('ParseManifestDetails(): Exiting function Result == ' + BoolToStr(res) + '.', 2);
   Result := res;
 end;
 
@@ -679,7 +719,7 @@ Boolean: True if parsing of the entire manifest is successful. False if it is
 var
   res: Boolean;
 begin
-  Log('ParseManifest(): Beginning function.');
+  LLog('ParseManifest(): Beginning function.', 2);
   res := True;
   
   if res then begin
@@ -690,7 +730,7 @@ begin
     res := ParseManifestDetails()
   end;
 
-  Log('ParseManifest(): Exiting function. Result == ' + BoolToStr(res) + '.');
+  LLog('ParseManifest(): Exiting function. Result == ' + BoolToStr(res) + '.', 2);
   Result := res;
 end;
 
@@ -708,16 +748,12 @@ Boolean: True if initialization was succesful. False if not. If False is
 *)
 var
   res: Boolean;
-  execResult: Integer;
 begin
-  Log('InitializeSetup(): Beginning function.');
+  LoggingLevel := 2;
+
+  LLog('InitializeSetup(): Beginning function.', 2);
 
   res := RetrieveManifest();
-
-  (*
-  Exec('>', 'cmd.exe /c mkdir "' + ExpandConstant('{commonprograms}\Kujata Reborn') + '"', ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
-  CreateShellLink(ExpandConstant('{commonprograms}\Kujata Reborn\fuckyouheresmylink.lnk'), 'Shortcut to open bullshit', 'C:\Windows\System32\notepad.exe', '', ExpandConstant('{sys}'), '', 0, SW_SHOWNORMAL);
-  *)
 
   if res then begin
     res := ParseManifest();
@@ -728,8 +764,10 @@ begin
   end;
 
   if not res then begin
-    Log('InitializeSetup(): res == FALSE, setup will not continue.');
+    LLog('InitializeSetup(): res == FALSE, setup will not continue.', 0);
   end;
+
+  LLog('InitializeSetup(): Exiting function with result ' + BoolToStr(res) + '.', 2);
 
   Result := res;
 end;
@@ -967,26 +1005,26 @@ begin
   res := True;
 
   for i := 0 to GetArrayLength(Options) - 1 do begin
-    Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Selected == ' + BoolToStr(Options[i].Selected) + '.');
+    LLog('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Selected == ' + BoolToStr(Options[i].Selected) + '.', 2);
     if Options[i].Selected then begin
       for j := 0 to GetArrayLength(Options[i].Locations) - 1 do begin
-        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Option.Key == ' + Options[i].Option.Key + '.');
-        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Option.Value == ' + Options[i].Option.Value + '.');
-        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Locations[' + IntToStr(j) + '].Key == ' + Options[i].Locations[j].Key + '.');
-        Log('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Locations[' + IntToStr(j) + '].Value == ' + Options[i].Locations[j].Value + '.');
-        Log('PrepareToDownloadInstallData(): Looking for short filename in ' + Options[i].Locations[j].Value + '.');
+        LLog('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Option.Key == ' + Options[i].Option.Key + '.', 2);
+        LLog('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Option.Value == ' + Options[i].Option.Value + '.', 2);
+        LLog('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Locations[' + IntToStr(j) + '].Key == ' + Options[i].Locations[j].Key + '.', 2);
+        LLog('PrepareToDownloadInstallData(): Options[' + IntToStr(i) + '].Locations[' + IntToStr(j) + '].Value == ' + Options[i].Locations[j].Value + '.', 2);
+        LLog('PrepareToDownloadInstallData(): Looking for short filename in ' + Options[i].Locations[j].Value + '.', 2);
         if ShortFilenameFromURL(Options[i].Locations[j].Value, filename) then begin
-          Log('PrepareToDownloadInstallData(): Downloading ' + filename + ' from ' + Options[i].Locations[j].Value + '.');
+          LLog('PrepareToDownloadInstallData(): Downloading ' + filename + ' from ' + Options[i].Locations[j].Value + '.', 2);
 
           if not RetrieveFileExtension(filename, fileExtension) then begin
             filename := Options[i].Locations[j].Key + '.' + Options[i].Extension;
-            Log('PrepareToDownloadInstallDate(): Modifying filename to ' + filename + '.');
+            LLog('PrepareToDownloadInstallData(): Modifying filename to ' + filename + '.', 2);
           end;
 
           if IsInstallDataPresent(filename) then begin
-            Log(ExpandConstant('PrepareToDownloadInstallData(): Found ' + filename + ' at {src}\' + filename + ' and attempting to copy to {tmp}\' + filename + '.'));
+            LLog(ExpandConstant('PrepareToDownloadInstallData(): Found ' + filename + ' at {src}\' + filename + ' and attempting to copy to {tmp}\' + filename + '.'), 1);
             if not Exec('>', ExpandConstant('cmd.exe /c copy /V /Y "{src}\' + filename + '" "{tmp}\' + filename + '"'), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult) then begin
-              Log(ExpandConstant('PrepareToDownloadInstallData(): Copy failed. Adding ' + filename + ' to download list.'));
+              LLog(ExpandConstant('PrepareToDownloadInstallData(): Copy failed. Adding ' + filename + ' to download list.'), 0);
               idpAddFile(Options[i].Locations[j].Value, ExpandConstant('{tmp}\' + filename));
             end;
           end else begin
@@ -1028,12 +1066,15 @@ begin
       if Options[i].Selected then begin
         numActions := GetArrayLength(Options[i].InstallActions) - 1
         for j := 0 to numActions do begin
-          Log('ProcessActions(): Working on Option ' + IntToStr(i) + ' of ' + IntToStr(numOptions) + ' and Action ' + IntToStr(j) + ' of ' + IntToStr(numActions) + '.');
+          LLog('ProcessActions(): Working on Option ' + IntToStr(i) + ' of ' + IntToStr(numOptions) + ' and Action ' + IntToStr(j) + ' of ' + IntToStr(numActions) + '.', 2);
           ActionProgressPage.SetText('Processing actions to install ' + Options[i].Option.Key, 'Action: ' + ExpandConstant(Options[i].InstallActions[j]));
           ActionProgressPage.SetProgress(j, numActions);
-          Log('ProcessActions(): Executing ' + Options[i].Option.Key + ' Action: ' + ExpandConstant(Options[i].InstallActions[j]));
+          LLog('ProcessActions(): Executing ' + Options[i].Option.Key + ' Action: ' + ExpandConstant(Options[i].InstallActions[j]), 1);
           res := Exec('>', ExpandConstant(Options[i].InstallActions[j]), ExpandConstant('{tmp}'), SW_SHOW, ewWaitUntilTerminated, execResult);
           if not res then begin
+            (* TODO: Change this to a installation-reversing error (halts installation and actually reverses/uninstalls everything) *)
+            (* Accomplishing this MAY be as simple as calling WizardForm.Close, however, you may also need to specify what code gets
+               called after that by overloading the CancelButtonClick function. *)
             MsgBox('ProcessActions():' + {#StrNewLine} + {#StrNewLine} + 'Action: ' + ExpandConstant(Options[i].InstallActions[j]) + {#StrNewLine} + {#StrNewLine} + 'execResult: ' + IntToStr(execResult), mbInformation, MB_OK);
           end;
         end;
@@ -1133,7 +1174,7 @@ begin
         if Assigned(Options[i].WizardPage) then begin
           if CurPageID = Options[i].WizardPage.ID then begin
             if Options[i].WizardPage.Values[Options[i].WizardListIndex] = True then begin
-              Log('NextButtonClick(): Options[' + IntToStr(i) + '].WizardPage.Values[Options[' + IntToStr(i) + '].WizardListIndex] was found to be True. Therefore ' + Options[i].Option.Value + ' is Selected.');
+              LLog('NextButtonClick(): Options[' + IntToStr(i) + '].WizardPage.Values[Options[' + IntToStr(i) + '].WizardListIndex] was found to be True. Therefore ' + Options[i].Option.Value + ' is Selected.', 2);
               Options[i].Selected := True;
             end;
           end;

@@ -1,4 +1,5 @@
-# ARCHIVED: This codebase is now unmaintained and archived for posterity only.
+# ARCHIVED
+This codebase is now unmaintained and archived for posterity only.
 
 # Kujata Reborn Client Installer.
 Windows 10 version 10.0.19041 (aka “version 2004”, aka May 2020 Update) is required for the automated installer.
